@@ -1,0 +1,9 @@
+.DS_Store
+.Spotlight-V100
+.Trashes
+__pycache__/
+.env
+runs/
+svd_cache/
+MetaMathQA-395K.json
+.ipynb_checkpoints/
