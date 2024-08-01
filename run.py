@@ -122,11 +122,6 @@ class TrainerConfig:
                 param.requires_grad = True
             else:
                 param.requires_grad = False
-                # Ensure only let SORSA layers to be FP32.
-                # if args.bf16:
-                #     param.data = param.data.to(torch.bfloat16)
-                # elif args.fp16:
-                #     param.data = param.data.to(torch.float16)
 
         self.training_arguments = SORSATrainingArguments(
             run_name=args.name,
