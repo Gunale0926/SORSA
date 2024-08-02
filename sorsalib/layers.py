@@ -81,7 +81,7 @@ class Linear(nn.Linear, SORSALayer):
                 # Merge the weights and mark it
                 if self.r > 0:
                     merge = self.sorsa_B @ torch.diag(self.sorsa_S) @ self.sorsa_A
-                    self.weight.data = merge * self.scale
+                    self.weight.data += merge * self.scale
                 self.merged = True
         else:
             if self.merge_weights and self.merged:

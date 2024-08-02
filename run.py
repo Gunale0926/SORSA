@@ -102,6 +102,7 @@ class TrainerConfig:
             sorsa_dropout=self.dropout,
         )
         self.loaded = False
+        # Load model in ALL float32 (residual is quantized to bf16)
         if os.path.isdir(args.svd_cache_path):
             print("Loading SVDed Model...")
             self.model = SORSAAutoModelForCausalLM.from_pretrained(
@@ -131,7 +132,7 @@ class TrainerConfig:
             gradient_accumulation_steps=self.accum_steps,
             logging_dir=self.run_path,
             logging_steps=1,
-            save_steps=50,
+            save_steps=1000,
             save_total_limit=1,
             report_to=["wandb"],
             save_strategy="steps",
