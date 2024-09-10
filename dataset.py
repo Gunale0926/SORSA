@@ -75,108 +75,148 @@ def remove_boxed(s):
         return None
 
 
-class MetaMathQADataset(Dataset):
-    # This dataset is used for training ONLY!
-    def __init__(self, file_path, tokenizer, max_length=512):
-        self.data = pd.read_json(file_path).to_dict(orient="records")
-        self.tokenizer = tokenizer
-        self.max_length = max_length
+def preprocess_metamathqa(item, tokenizer, max_length):
+    # Identical replica with PiSSA
+    question = item["query"]
+    completion = item["response"]
+    text = f"{tokenizer.bos_token}Below is an instruction that describes a task. Write a response that appropriately completes the request.\n\n### Instruction:\n{question}\n\n### Response:"
+    target_text = f"{completion}{tokenizer.eos_token}"
+    query = tokenizer.encode_plus(
+        text=text,
+        max_length=max_length,
+        truncation=True,
+        return_tensors="pt",
+        add_special_tokens=False,
+    )
+    ans = tokenizer.encode_plus(
+        text=f"{target_text}",
+        max_length=max_length,
+        truncation=True,
+        return_tensors="pt",
+        add_special_tokens=False,
+    )
 
-    def __len__(self):
-        return len(self.data)
+    length = query["input_ids"].size(-1)
 
-    def __getitem__(self, idx):
-        item = self.data[idx]
-        question = item["query"]
-        completion = item["response"]
-        text = f"Below is an instruction that describes a task. Write a response that appropriately completes the request.\n\n### Instruction:\n{question}\n\n### Response:"
-        target_text = f"{completion}{self.tokenizer.eos_token}"
-        query = self.tokenizer.encode_plus(
-            text=text,
-            max_length=self.max_length,
-            truncation=True,
-            return_tensors="pt",
-        )
-        full = self.tokenizer.encode_plus(
-            text=f"{text}{target_text}",
-            max_length=self.max_length,
-            truncation=True,
-            return_tensors="pt",
-        )
+    input_ids = torch.concat(
+        (query["input_ids"].squeeze(0), ans["input_ids"].squeeze(0))
+    )
+    attention_mask = torch.concat(
+        (query["attention_mask"].squeeze(0), ans["attention_mask"].squeeze(0))
+    )
 
-        input_ids = full["input_ids"].squeeze(0)
-        attention_mask = full["attention_mask"].squeeze(0)
+    labels = torch.full_like(input_ids, fill_value=-100)
+    labels[length:] = input_ids[length:]
 
-        labels = torch.full_like(input_ids, fill_value=-100)
-        length = query["input_ids"].size(-1)
-        labels[length:] = input_ids[length:]
+    batch = {
+        "input_ids": input_ids,
+        "attention_mask": attention_mask,
+        "labels": labels,
+    }
+    return batch
 
-        batch = {
-            "input_ids": input_ids,
-            "attention_mask": attention_mask,
-            "labels": labels,
-        }
-        return batch
 
-    def collate_fn(self, batch):
-        input_ids = [item["input_ids"] for item in batch]
-        attention_mask = [item["attention_mask"] for item in batch]
-        labels = [item["labels"] for item in batch]
+def collate_fn(batch, tokenizer):
 
-        max_length = max(x.size(0) for x in input_ids)
+    input_ids = [item["input_ids"] for item in batch]
+    attention_mask = [item["attention_mask"] for item in batch]
+    labels = [item["labels"] for item in batch]
 
-        if self.tokenizer.padding_side == "right":
-            # Pad sequences to the right
-            input_ids_padded = torch.nn.utils.rnn.pad_sequence(
-                input_ids, batch_first=True, padding_value=self.tokenizer.pad_token_id
+    max_length = max(x.size(0) for x in input_ids)
+
+    input_ids_padded = torch.nn.utils.rnn.pad_sequence(
+        input_ids, batch_first=True, padding_value=tokenizer.pad_token_id
+    )
+    attention_mask_padded = torch.nn.utils.rnn.pad_sequence(
+        attention_mask, batch_first=True, padding_value=0
+    )
+    labels_padded = torch.nn.utils.rnn.pad_sequence(
+        labels, batch_first=True, padding_value=-100
+    )
+
+    batch = {
+        "input_ids": input_ids_padded,
+        "attention_mask": attention_mask_padded,
+        "labels": labels_padded,
+    }
+
+    return batch
+
+
+def preprocess_codefeedback(example, tokenizer, max_length=512):
+    input_ids = []
+    labels = []
+
+    for message in example["messages"]:
+        role = message["role"]
+        content = message["content"]
+
+        if role == "user":
+            # For user messages, add to input_ids and set labels to -100
+            user_ids = tokenizer.encode(
+                f"@@ Instruction\n{content}",
+                add_special_tokens=False,
+                truncation=True,
+                max_length=max_length,
             )
-            attention_mask_padded = torch.nn.utils.rnn.pad_sequence(
-                attention_mask, batch_first=True, padding_value=0
+            input_ids.extend(user_ids)
+            labels.extend([-100] * len(user_ids))
+        elif role == "assistant":
+            # For assistant messages, add to both input_ids and labels, append EOS token
+            assistant_ids = tokenizer.encode(
+                f"@@ Response\n{content}{tokenizer.eos_token}",
+                add_special_tokens=False,
+                truncation=True,
+                max_length=max_length,
             )
-            labels_padded = torch.nn.utils.rnn.pad_sequence(
-                labels, batch_first=True, padding_value=-100
-            )
-        else:
-            # Pad sequences to the left
-            input_ids_padded = []
-            attention_mask_padded = []
-            labels_padded = []
 
-            for input_id, attn_mask, label in zip(input_ids, attention_mask, labels):
-                padding_length = max_length - input_id.size(0)
+            input_ids.extend(assistant_ids)
+            labels.extend(assistant_ids)
 
-                input_ids_padded.append(
-                    torch.cat(
-                        (
-                            torch.full(
-                                (padding_length,),
-                                self.tokenizer.pad_token_id,
-                                dtype=torch.long,
-                            ),
-                            input_id,
-                        ),
-                        dim=0,
-                    )
-                )
-                attention_mask_padded.append(
-                    torch.cat(
-                        (torch.zeros(padding_length, dtype=torch.long), attn_mask),
-                        dim=0,
-                    )
-                )
-                labels_padded.append(
-                    torch.cat(
-                        (torch.full((padding_length,), -100, dtype=torch.long), label),
-                        dim=0,
-                    )
-                )
+    # Convert to tensors
+    input_ids = torch.tensor(input_ids)
+    labels = torch.tensor(labels)
 
-            input_ids_padded = torch.stack(input_ids_padded, dim=0)
-            attention_mask_padded = torch.stack(attention_mask_padded, dim=0)
-            labels_padded = torch.stack(labels_padded, dim=0)
+    attention_mask = (input_ids != tokenizer.pad_token_id).long()
 
-        return {
-            "input_ids": input_ids_padded,
-            "attention_mask": attention_mask_padded,
-            "labels": labels_padded,
-        }
+    return {
+        "input_ids": input_ids,
+        "labels": labels,
+        "attention_mask": attention_mask,
+    }
+
+
+def preprocess_codefeedback_instructed(example, tokenizer, max_length=512):
+    # Self implementation
+    input_ids = []
+    labels = []
+
+    user_ids = tokenizer.encode(
+        f"@@ Instruction\n{example['query']}\n\n@@ Response\n",
+        add_special_tokens=False,
+        truncation=True,
+        max_length=max_length,
+    )
+    input_ids.extend(user_ids)
+    labels.extend([-100] * len(user_ids))
+
+    assistant_ids = tokenizer.encode(
+        f"{example['answer']}{tokenizer.eos_token}",
+        add_special_tokens=False,
+        truncation=True,
+        max_length=max_length,
+    )
+    input_ids.extend(assistant_ids)
+    labels.extend(assistant_ids)
+
+    # Convert to tensors
+    input_ids = torch.tensor(input_ids)
+    labels = torch.tensor(labels)
+
+    attention_mask = (input_ids != tokenizer.pad_token_id).long()
+
+    return {
+        "input_ids": input_ids,
+        "labels": labels,
+        "attention_mask": attention_mask,
+    }

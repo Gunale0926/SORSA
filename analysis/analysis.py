@@ -10,7 +10,7 @@ import sys
 import os
 
 sys.path.append(os.path.expanduser("../"))
-from sorsalib.layers import calc_ortho
+from sorsalib import calc_ortho
 
 
 def save_weight(model, step, metadata_path):

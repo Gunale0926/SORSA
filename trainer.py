@@ -15,8 +15,7 @@
 """
 The Trainer class, to easily train a 🤗 Transformers from scratch or finetune it on a new task.
 """
-from models import SORSATrainingArguments
-from sorsalib.layers import calc_ortho
+from sorsalib import SORSATrainingArguments, calc_ortho
 
 import contextlib
 import copy
@@ -2584,8 +2583,6 @@ class Trainer:
                 with self.accelerator.accumulate(model):
                     tr_loss_step = self.training_step(model, inputs)
 
-                    
-
                 if (
                     args.logging_nan_inf_filter
                     and not is_torch_xla_available()
@@ -2655,8 +2652,9 @@ class Trainer:
                     # SORSA maintain orthonormality
                     with self.compute_loss_context_manager():
                         ortho_loss = calc_ortho(model)
-                        s_gamma = self.args.gamma / self.args.learning_rate
-                        self.accelerator.backward(s_gamma * ortho_loss)
+                        if ortho_loss is not None:
+                            s_gamma = self.args.gamma / self.args.learning_rate
+                            self.accelerator.backward(s_gamma * ortho_loss)
 
                     # Optimizer step
                     self.optimizer.step()
@@ -2679,7 +2677,13 @@ class Trainer:
                     )
 
                     self._maybe_log_save_evaluate(
-                        tr_loss, ortho_loss, grad_norm, model, trial, epoch, ignore_keys_for_eval
+                        tr_loss,
+                        ortho_loss,
+                        grad_norm,
+                        model,
+                        trial,
+                        epoch,
+                        ignore_keys_for_eval,
                     )
                 else:
                     self.control = self.callback_handler.on_substep_end(
@@ -2705,7 +2709,13 @@ class Trainer:
                 args, self.state, self.control
             )
             self._maybe_log_save_evaluate(
-                tr_loss, ortho_loss, grad_norm, model, trial, epoch, ignore_keys_for_eval
+                tr_loss,
+                ortho_loss,
+                grad_norm,
+                model,
+                trial,
+                epoch,
+                ignore_keys_for_eval,
             )
 
             if DebugOption.TPU_METRICS_DEBUG in self.args.debug:
@@ -3212,7 +3222,10 @@ class Trainer:
                 / (self.state.global_step - self._globalstep_last_logged),
                 4,
             )
-            logs["orthonormality"] = ortho_loss.item()
+            if ortho_loss is not None:
+                logs["orthonormality"] = ortho_loss.item()
+            else:
+                logs["orthonormality"] = 0
             if grad_norm is not None:
                 logs["grad_norm"] = (
                     grad_norm.detach().item()

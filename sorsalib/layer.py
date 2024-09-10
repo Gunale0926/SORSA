@@ -5,21 +5,25 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from typing import Optional
 
 
 class SORSALayer:
     def __init__(
         self,
         r: int,
-        alpha: float,
-        sorsa_dropout: float,
+        alpha: Optional[float],
+        dropout: float,
         merge_weights: bool,
     ):
         self.r = r
-        self.scale = alpha / r
+        if alpha == None:
+            self.scale = 1
+        else:
+            self.scale = alpha / r
         # Optional dropout
-        if sorsa_dropout > 0.0:
-            self.sorsa_dropout = nn.Dropout(p=sorsa_dropout)
+        if dropout > 0.0:
+            self.sorsa_dropout = nn.Dropout(p=dropout)
         else:
             self.sorsa_dropout = lambda x: x
         # Mark the weight as unmerged
@@ -27,27 +31,32 @@ class SORSALayer:
         self.merge_weights = merge_weights
 
 
-class Linear(nn.Linear, SORSALayer):
+class Linear(SORSALayer, nn.Module):
     # SORSA implemented in a dense layer
     def __init__(
         self,
         in_features: int,
         out_features: int,
         r: int = 0,
-        alpha: float = 1.0,
-        sorsa_dropout: float = 0.0,
+        alpha: Optional[float] = None,
+        dropout: float = 0.0,
         merge_weights: bool = True,
-        **kwargs
+        bias=False,
     ):
-        nn.Linear.__init__(self, in_features, out_features, **kwargs)
+        nn.Module.__init__(self)
         SORSALayer.__init__(
             self,
             r=r,
             alpha=alpha,
-            sorsa_dropout=sorsa_dropout,
+            dropout=dropout,
             merge_weights=merge_weights,
         )
 
+        self.weight = nn.Parameter(torch.empty((out_features, in_features)))
+        if bias == True:
+            self.bias = nn.Parameter(torch.empty((out_features)))
+        else:
+            self.bias = None
         # Actual trainable parameters
         if r > 0:
             self.sorsa_A = nn.Parameter(self.weight.new_zeros((r, in_features)))
@@ -55,39 +64,32 @@ class Linear(nn.Linear, SORSALayer):
             self.sorsa_B = nn.Parameter(self.weight.new_zeros((out_features, r)))
             # Freezing the pre-trained weight matrix
             self.weight.requires_grad = False
-        self.reset_parameters()
 
-    def reset_parameters(self):
-        nn.Linear.reset_parameters(self)
-
-    def init_sorsa(self):
+    def sorsa_init(self):
         if hasattr(self, "sorsa_A"):
             self.merged = False
             u, s, vt = torch.linalg.svd(self.weight.T, full_matrices=False)
             self.sorsa_A.data = u[:, : self.r].T.contiguous()
             self.sorsa_S.data = s[: self.r]
             self.sorsa_B.data = vt[: self.r, :].T.contiguous()
-            merge = self.sorsa_B @ torch.diag(self.sorsa_S) @ self.sorsa_A
+            merge = (self.sorsa_B * self.sorsa_S) @ self.sorsa_A
             self.weight.data = (self.weight - merge * self.scale).to(
                 torch.bfloat16
             )  # Quantize to BF16 (Align the same setup with PiSSA)
 
-    def train(self, mode: bool = True):
-        nn.Linear.train(self, mode)
-
-    def merge(self, mode: bool):
+    def _merge(self, mode: bool):
         if mode:
             if self.merge_weights and not self.merged:
                 # Merge the weights and mark it
                 if self.r > 0:
-                    merge = self.sorsa_B @ torch.diag(self.sorsa_S) @ self.sorsa_A
+                    merge = (self.sorsa_B * self.sorsa_S) @ self.sorsa_A
                     self.weight.data += merge * self.scale
                 self.merged = True
         else:
             if self.merge_weights and self.merged:
                 # Make sure that the weights are not merged
                 if self.r > 0:
-                    merge = self.sorsa_B @ torch.diag(self.sorsa_S) @ self.sorsa_A
+                    merge = (self.sorsa_B * self.sorsa_S) @ self.sorsa_A
                     self.weight.data -= merge * self.scale
                 self.merged = False
 
@@ -97,7 +99,7 @@ class Linear(nn.Linear, SORSALayer):
             result += (
                 F.linear(
                     self.sorsa_dropout(x),
-                    self.sorsa_B @ torch.diag(self.sorsa_S) @ self.sorsa_A,
+                    (self.sorsa_B * self.sorsa_S) @ self.sorsa_A,
                 )
                 * self.scale
             )
@@ -111,15 +113,23 @@ class Linear(nn.Linear, SORSALayer):
 # Largely adpot idea from AdaLoRA
 def calc_ortho(model):
     ortho_loss = 0.0
-    for name in model.replaced:
-        a = model.get_submodule(name).sorsa_A
-        ia = torch.eye(a.shape[0], device=a.device)
-        ia.requires_grad = False
-        a = a @ a.T - ia
-        ortho_loss += torch.norm(a, p="fro")
-        b = model.get_submodule(name).sorsa_B
-        ib = torch.eye(b.shape[1], device=a.device)
-        ib.requires_grad = False
-        b = b.T @ b - ib
-        ortho_loss += torch.norm(b, p="fro")
-    return ortho_loss / len(model.replaced) / 2
+    den = 0
+    for name, param in model.named_parameters():
+        if "sorsa_A" in name:
+            a = param
+            ia = torch.eye(a.shape[0], device=a.device)
+            ia.requires_grad = False
+            a = a @ a.T - ia
+            ortho_loss += torch.norm(a, p="fro")
+            den += 1
+        elif "sorsa_B" in name:
+            b = param
+            ib = torch.eye(b.shape[1], device=b.device)
+            ib.requires_grad = False
+            b = b.T @ b - ib
+            ortho_loss += torch.norm(b, p="fro")
+            den += 1
+    if den != 0:
+        return ortho_loss / den
+    else:
+        return None
