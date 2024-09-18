@@ -8,27 +8,6 @@ This repository contains the codes of experiments of the paper *SORSA: Singular 
 
 Singular Values and Orthonormal Regularized Singular Vectors Adaptation, or **SORSA**, is a novel PEFT method. Each SORSA layer consists of two main parts: trainable principal singular weights $W_p = U_p \Sigma_p V^\top_p$, and frozen residual weights $W_r = U_r \Sigma_r V^\top_r$. These parts are initialized by performing singular value decomposition (SVD) on pre-trained weights. Moreover, we implement an orthonormal regularizer, which could effectively transfer the scaling information into $\Sigma_p$, that ensures the parameter updating of SORSA layers is evenly and minimized on $U_p$ and $V^\top_p$. SORSA layers could be merged during inference, thus eliminating inference latency. After all, SORSA shows a faster convergence speed than PiSSA and LoRA in our experiments.
 
-## Hugging Face PEFT package
-
-You could install [PEFT package with SORSA implemented](https://github.com/Gunale0926/peft) using:
-
-```bash
-pip install git+https://github.com/Gunale0926/peft
-```
-
-```python
-from transformers import AutoModelForSequenceClassification
-from peft import SorsaConfig, get_peft_config, get_peft_model
-
-peft_config = SorsaConfig(
-    r=4, sorsa_alpha=4, gamma=4e-4, target_modules=["query", "value"]
-)
-
-model = AutoModelForSequenceClassification.from_pretrained("bert-base-uncased")
-model = get_peft_model(model, peft_config)
-model.print_trainable_parameters()
-```
-
 ## Empirical Test Results
 
 ### Llama 2 7B
