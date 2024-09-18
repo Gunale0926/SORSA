@@ -1,6 +1,6 @@
 from datasets import load_dataset
 import torch
-from torch.utils.data import Subset
+from torch.utils.data import Subset, Dataset
 from auto_model import SORSAAutoModelForCausalLM, SORSAAutoConfig
 from models import SORSATrainingArguments
 from transformers import AutoTokenizer, AutoConfig
@@ -87,8 +87,8 @@ class TrainerConfig:
                 tokenizer=self.tokenizer,
                 max_length=512,
             )
+            self.train_subset = Subset(self.train_dataset, range(0, 100000))
         elif args.code:
-
             def preprocess_function(example):
                 input_ids = []
                 labels = []
@@ -99,14 +99,14 @@ class TrainerConfig:
 
                     if role == "user":
                         # For user messages, add to input_ids and set labels to -100
-                        user_ids = tokenizer.encode(
+                        user_ids = self.tokenizer.encode(
                             f"Instruction: {content}", add_special_tokens=False
                         )
                         input_ids.extend(user_ids)
                         labels.extend([-100] * len(user_ids))
                     elif role == "assistant":
                         # For assistant messages, add to both input_ids and labels, append EOS token
-                        assistant_ids = tokenizer.encode(
+                        assistant_ids = self.tokenizer.encode(
                             f"Output: {content}</s>", add_special_tokens=False
                         )
                         input_ids.extend(assistant_ids)
@@ -119,14 +119,14 @@ class TrainerConfig:
                     labels = labels[:max_length]
                 else:
                     padding_length = max_length - len(input_ids)
-                    input_ids.extend([tokenizer.pad_token_id] * padding_length)
+                    input_ids.extend([self.tokenizer.pad_token_id] * padding_length)
                     labels.extend([-100] * padding_length)
 
                 # Convert to tensors
                 input_ids = torch.tensor(input_ids)
                 labels = torch.tensor(labels)
 
-                attention_mask = (input_ids != tokenizer.pad_token_id).long()
+                attention_mask = (input_ids != self.tokenizer.pad_token_id).long()
 
                 return {
                     "input_ids": input_ids,
@@ -134,12 +134,11 @@ class TrainerConfig:
                     "attention_mask": attention_mask,
                 }
 
-            self.train_dataset = load_dataset("m-a-p/Code-Feedback")
-            self.train_dataset = self.train_dataset.map(preprocess_function)
-            self.train_dataset.set_format(
+            self.train_dataset = load_dataset("m-a-p/Code-Feedback", split="train[:100000]")
+            self.train_subset = self.train_dataset.map(preprocess_function)
+            self.train_subset.set_format(
                 type="torch", columns=["input_ids", "labels", "attention_mask"]
             )
-        self.train_subset = Subset(self.train_dataset, range(0, 100000))
         target = [
             "q_proj",
             "o_proj",
@@ -171,6 +170,7 @@ class TrainerConfig:
                 cache_dir=args.cache_path,
                 config=config,
             )
+            self.model.to("cuda")
             self.model._sorsa_init()
             self.model.save_pretrained(args.svd_cache_path)
         for name, param in self.model.named_parameters():
@@ -256,6 +256,7 @@ elif args.merge:
     run_path = f"{args.run_path}/{args.name}"
     checkpoint_path = f"{run_path}/checkpoint"
     model = SORSAAutoModelForCausalLM.from_pretrained(checkpoint_path)
+    model.to("cuda")
     model.sorsa_merge(True)
     for name, param in model.named_parameters():
         if "sorsa_" in name:

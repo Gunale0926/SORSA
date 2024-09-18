@@ -63,10 +63,10 @@ class Linear(nn.Linear, SORSALayer):
     def init_sorsa(self):
         if hasattr(self, "sorsa_A"):
             self.merged = False
-            ut, s, v = torch.linalg.svd(self.weight, full_matrices=False)
-            self.sorsa_A.data = ut[: self.r, :]
+            u, s, vt = torch.linalg.svd(self.weight.T, full_matrices=False)
+            self.sorsa_A.data = u[:, : self.r].T.contiguous()
             self.sorsa_S.data = s[: self.r]
-            self.sorsa_B.data = v[:, : self.r]
+            self.sorsa_B.data = vt[: self.r, :].T.contiguous()
             merge = self.sorsa_B @ torch.diag(self.sorsa_S) @ self.sorsa_A
             self.weight.data = (self.weight - merge * self.scale).to(
                 torch.bfloat16
