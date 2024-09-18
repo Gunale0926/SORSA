@@ -1,3 +1,4 @@
+from datasets import load_dataset
 import torch
 from torch.utils.data import Subset
 from auto_model import SORSAAutoModelForCausalLM, SORSAAutoConfig
@@ -25,6 +26,8 @@ parser.add_argument("-d", "--dropout", type=float, default=0.0)
 parser.add_argument("-t", "--train", action="store_true")
 parser.add_argument("-T", "--test", action="store_true")
 parser.add_argument("-m", "--merge", action="store_true")
+parser.add_argument("--metamath", action="store_true")
+parser.add_argument("--code", action="store_true")
 parser.add_argument("--bf16", action="store_true")
 parser.add_argument("--fp16", action="store_true")
 parser.add_argument("--tf32", action="store_true")
@@ -78,11 +81,64 @@ class TrainerConfig:
             args.model, cache_dir=args.cache_path, use_fast=True
         )
         self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
-        self.train_dataset = MetaMathQADataset(
-            file_path="datasets/MetaMathQA-395K.json",
-            tokenizer=self.tokenizer,
-            max_length=512,
-        )
+        if args.metamath:
+            self.train_dataset = MetaMathQADataset(
+                file_path="datasets/MetaMathQA-395K.json",
+                tokenizer=self.tokenizer,
+                max_length=512,
+            )
+        elif args.code:
+
+            def preprocess_function(example):
+                input_ids = []
+                labels = []
+
+                for message in example["messages"]:
+                    role = message["role"]
+                    content = message["content"]
+
+                    if role == "user":
+                        # For user messages, add to input_ids and set labels to -100
+                        user_ids = tokenizer.encode(
+                            f"Instruction: {content}", add_special_tokens=False
+                        )
+                        input_ids.extend(user_ids)
+                        labels.extend([-100] * len(user_ids))
+                    elif role == "assistant":
+                        # For assistant messages, add to both input_ids and labels, append EOS token
+                        assistant_ids = tokenizer.encode(
+                            f"Output: {content}</s>", add_special_tokens=False
+                        )
+                        input_ids.extend(assistant_ids)
+                        labels.extend(assistant_ids)
+
+                # Truncate or pad sequences
+                max_length = 512
+                if len(input_ids) > max_length:
+                    input_ids = input_ids[:max_length]
+                    labels = labels[:max_length]
+                else:
+                    padding_length = max_length - len(input_ids)
+                    input_ids.extend([tokenizer.pad_token_id] * padding_length)
+                    labels.extend([-100] * padding_length)
+
+                # Convert to tensors
+                input_ids = torch.tensor(input_ids)
+                labels = torch.tensor(labels)
+
+                attention_mask = (input_ids != tokenizer.pad_token_id).long()
+
+                return {
+                    "input_ids": input_ids,
+                    "labels": labels,
+                    "attention_mask": attention_mask,
+                }
+
+            self.train_dataset = load_dataset("m-a-p/Code-Feedback")
+            self.train_dataset = self.train_dataset.map(preprocess_function)
+            self.train_dataset.set_format(
+                type="torch", columns=["input_ids", "labels", "attention_mask"]
+            )
         self.train_subset = Subset(self.train_dataset, range(0, 100000))
         target = [
             "q_proj",
@@ -188,7 +244,7 @@ elif args.train:
     trainer = Trainer(
         model=config.model,
         args=config.training_arguments,
-        data_collator=config.train_dataset.collate_fn,
+        data_collator=config.train_dataset.collate_fn if args.metamath else None,
         train_dataset=config.train_subset,
     )
     print(f"Trainable Parameters: {trainer.get_num_trainable_parameters()}")
