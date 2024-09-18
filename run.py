@@ -89,9 +89,17 @@ class TrainerConfig:
             )
             self.train_subset = Subset(self.train_dataset, range(0, 100000))
         elif args.code:
+
             def preprocess_function(example):
                 input_ids = []
                 labels = []
+
+                system = self.tokenizer.encode(
+                    "You are an exceptionally intelligent coding assistant that consistently delivers accurate and reliable responses to user instructions."
+                )
+
+                input_ids.extend(system)
+                labels.extend([-100] * len(system))
 
                 for message in example["messages"]:
                     role = message["role"]
@@ -100,17 +108,17 @@ class TrainerConfig:
                     if role == "user":
                         # For user messages, add to input_ids and set labels to -100
                         user_ids = self.tokenizer.encode(
-                            f"Instruction: {content}", add_special_tokens=False
+                            f"@@ Instruction\n{content}", add_special_tokens=False
                         )
                         input_ids.extend(user_ids)
                         labels.extend([-100] * len(user_ids))
                     elif role == "assistant":
                         # For assistant messages, add to both input_ids and labels, append EOS token
                         assistant_ids = self.tokenizer.encode(
-                            f"Output: {content}</s>", add_special_tokens=False
+                            f"@@ Response\n{content}</s>", add_special_tokens=False
                         )
-                        input_ids.extend(assistant_ids)
-                        labels.extend(assistant_ids)
+                        input_ids.extend(assistant_ids + "\n\n")
+                        labels.extend(assistant_ids + [-100])
 
                 # Truncate or pad sequences
                 max_length = 512
@@ -134,7 +142,9 @@ class TrainerConfig:
                     "attention_mask": attention_mask,
                 }
 
-            self.train_dataset = load_dataset("m-a-p/Code-Feedback", split="train[:100000]")
+            self.train_dataset = load_dataset(
+                "m-a-p/Code-Feedback", split="train[:100000]"
+            )
             self.train_subset = self.train_dataset.map(preprocess_function)
             self.train_subset.set_format(
                 type="torch", columns=["input_ids", "labels", "attention_mask"]
