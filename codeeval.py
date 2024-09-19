@@ -1,10 +1,11 @@
 import json
+import re
 from vllm import LLM, SamplingParams
 from human_eval.data import read_problems
 from human_eval.evaluation import evaluate_functional_correctness
 
 model = LLM(
-    "./runs/Llama2_SORSA_r128/checkpoint",
+    "./runs/llama2_SORSA_r128_code/checkpoint",
     dtype="bfloat16",
     tokenizer="meta-llama/Llama-2-7b-hf",
 )
@@ -20,8 +21,8 @@ def run_human_eval():
 
     # Prepare prompts for batch inference
     prompts = [
-        f"You are an exceptionally intelligent coding assistant that consistently delivers accurate and reliable responses to user instructions.\n\n@@ Instruction\n Here is the given code to do completion:\n```python\n{problem['prompt']}\n```\n\nPlease continue to complete the function with python programming language. You are not allowed to modify the given code and do the completion only.\n\nPlease return all completed codes in one code block.\nThis code block should be in the following format:\n'''python\n# Your codes here\n'''\n\n@@ Reponse"
-        for problem in problems.values()
+       f"You are an exceptionally intelligent coding assistant that consistently delivers accurate and reliable responses to user instructions.\n\n@@ Instruction\n Here is the given code to do completion:\n```python\n{problem['prompt']}\n```\n\nPlease continue to complete the function with python programming language. You are not allowed to modify the given code and do the completion only.\n\nPlease return all completed codes in one code block.\nThis code block should be in the following format:\n'''python\n# Your codes here\n'''\n\n@@ Reponse"
+       for problem in problems.values()
     ]
     task_ids = list(problems.keys())
 
@@ -32,7 +33,13 @@ def run_human_eval():
     completions = {}
     for task_id, output in zip(task_ids, outputs):
         completion = output.outputs[0].text
-        completions[task_id] = completion
+        pattern = r"```python\s*([\s\S]*?)\s```"
+        match = re.search(pattern,completion)
+        if match is not None:
+            match = match.group(1)
+        else:
+            match = completion
+        completions[task_id] = match
 
     # Save completions to a file
     with open("completions.jsonl", "w") as f:
