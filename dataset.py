@@ -220,7 +220,7 @@ def preprocess_codefeedback_instructed(example, tokenizer, max_length=512):
     labels = []
 
     user_ids = tokenizer.encode(
-        f"@@ Instruction\n{example['query']}",
+        f"@@ Instruction\n{example['query']}\n\n",
         add_special_tokens=False,
         truncation=True,
         max_length=max_length,
