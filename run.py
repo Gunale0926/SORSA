@@ -117,11 +117,12 @@ class TrainerConfig:
                         assistant_ids = self.tokenizer.encode(
                             f"@@ Response\n{content}</s>", add_special_tokens=False
                         )
-                        input_ids.extend(assistant_ids + "\n\n")
-                        labels.extend(assistant_ids + [-100])
+
+                        input_ids.extend(assistant_ids)
+                        labels.extend(assistant_ids)
 
                 # Truncate or pad sequences
-                max_length = 512
+                max_length = 1024
                 if len(input_ids) > max_length:
                     input_ids = input_ids[:max_length]
                     labels = labels[:max_length]
