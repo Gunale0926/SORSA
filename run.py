@@ -1,13 +1,13 @@
 from datasets import load_dataset
 import torch
-from torch.utils.data import Subset, Dataset
 from auto_model import SORSAAutoModelForCausalLM, SORSAAutoConfig
 from models import SORSATrainingArguments
 from transformers import AutoTokenizer, AutoConfig
 from dataset import (
-    MetaMathQADataset,
+    preprocess_metamathqa,
     preprocess_codefeedback,
     preprocess_codefeedback_instructed,
+    collate_fn,
 )
 from test import test_gsm, test_math
 import argparse
@@ -24,6 +24,7 @@ parser = argparse.ArgumentParser(
 
 parser.add_argument("-n", "--name", type=str, default="SORSA")
 parser.add_argument("-r", "--rank", type=int, default=4)
+parser.add_argument("-", "--length", type=int, default=512)
 parser.add_argument("-a", "--alpha", type=float, default=None)
 parser.add_argument("-g", "--gamma", type=float, default=0.1)
 parser.add_argument("-d", "--dropout", type=float, default=0.0)
@@ -86,23 +87,25 @@ class TrainerConfig:
         )
         self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
         if args.metamath:
-            self.train_dataset = MetaMathQADataset(
-                file_path="datasets/MetaMathQA-395K.json",
-                tokenizer=self.tokenizer,
-                max_length=512,
+            self.train_dataset = load_dataset(
+                "meta-math/MetaMathQA", split="train[:100000]"
             )
-            self.train_subset = Subset(self.train_dataset, range(0, 100000))
-        elif args.code:
+            self.train_dataset = self.train_dataset.map(
+                lambda x: preprocess_metamathqa(x, self.tokenizer, args.length)
+            )
 
+        elif args.code:
             self.train_dataset = load_dataset(
                 "m-a-p/CodeFeedback-Filtered-Instruction", split="train[:100000]"
             )
-            self.train_subset = self.train_dataset.map(
-                    lambda x: preprocess_codefeedback_instructed(x, self.tokenizer)
+            self.train_dataset = self.train_dataset.map(
+                lambda x: preprocess_codefeedback_instructed(
+                    x, self.tokenizer, args.length
+                )
             )
-            self.train_subset.set_format(
-                type="torch", columns=["input_ids", "labels", "attention_mask"]
-            )
+        self.train_dataset.set_format(
+            type="torch", columns=["input_ids", "labels", "attention_mask"]
+        )
         target = [
             "q_proj",
             "o_proj",
@@ -208,8 +211,10 @@ elif args.train:
     trainer = Trainer(
         model=config.model,
         args=config.training_arguments,
-        data_collator=config.train_dataset.collate_fn if args.metamath else None,
-        train_dataset=config.train_subset,
+        data_collator=lambda x: (
+            collate_fn(x, config.tokenizer) if args.metamath else None
+        ),
+        train_dataset=config.train_dataset,
     )
     print(f"Trainable Parameters: {trainer.get_num_trainable_parameters()}")
     # trainer.train(resume_from_checkpoint=True)
