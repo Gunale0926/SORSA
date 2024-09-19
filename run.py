@@ -98,7 +98,7 @@ class TrainerConfig:
                 "m-a-p/CodeFeedback-Filtered-Instruction", split="train[:100000]"
             )
             self.train_subset = self.train_dataset.map(
-                preprocess_codefeedback_instructed
+                    lambda x: preprocess_codefeedback_instructed(x, self.tokenizer)
             )
             self.train_subset.set_format(
                 type="torch", columns=["input_ids", "labels", "attention_mask"]

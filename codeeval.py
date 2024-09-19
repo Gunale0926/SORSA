@@ -20,8 +20,12 @@ def run_human_eval():
     problems = read_problems()
 
     # Prepare prompts for batch inference
+    # prompts = [
+    #    f"You are an exceptionally intelligent coding assistant that consistently delivers accurate and reliable responses to user instructions.\n\n@@ Instruction\n Here is the given code to do completion:\n```python\n{problem['prompt']}\n```\n\nPlease continue to complete the function with python programming language. You are not allowed to modify the given code and do the completion only.\n\nPlease return all completed codes in one code block.\nThis code block should be in the following format:\n'''python\n# Your codes here\n'''\n\n@@ Reponse"
+    #    for problem in problems.values()
+    # ]
     prompts = [
-       f"You are an exceptionally intelligent coding assistant that consistently delivers accurate and reliable responses to user instructions.\n\n@@ Instruction\n Here is the given code to do completion:\n```python\n{problem['prompt']}\n```\n\nPlease continue to complete the function with python programming language. You are not allowed to modify the given code and do the completion only.\n\nPlease return all completed codes in one code block.\nThis code block should be in the following format:\n'''python\n# Your codes here\n'''\n\n@@ Reponse"
+        f"@@ Instruction\n{problem['prompt']}\n\n@@ Response\n"
        for problem in problems.values()
     ]
     task_ids = list(problems.keys())
