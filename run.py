@@ -4,7 +4,11 @@ from torch.utils.data import Subset, Dataset
 from auto_model import SORSAAutoModelForCausalLM, SORSAAutoConfig
 from models import SORSATrainingArguments
 from transformers import AutoTokenizer, AutoConfig
-from dataset import MetaMathQADataset
+from dataset import (
+    MetaMathQADataset,
+    preprocess_codefeedback,
+    preprocess_codefeedback_instructed,
+)
 from test import test_gsm, test_math
 import argparse
 import os
@@ -90,63 +94,12 @@ class TrainerConfig:
             self.train_subset = Subset(self.train_dataset, range(0, 100000))
         elif args.code:
 
-            def preprocess_function(example):
-                input_ids = []
-                labels = []
-
-                system = self.tokenizer.encode(
-                    "You are an exceptionally intelligent coding assistant that consistently delivers accurate and reliable responses to user instructions."
-                )
-
-                input_ids.extend(system)
-                labels.extend([-100] * len(system))
-
-                for message in example["messages"]:
-                    role = message["role"]
-                    content = message["content"]
-
-                    if role == "user":
-                        # For user messages, add to input_ids and set labels to -100
-                        user_ids = self.tokenizer.encode(
-                            f"@@ Instruction\n{content}", add_special_tokens=False
-                        )
-                        input_ids.extend(user_ids)
-                        labels.extend([-100] * len(user_ids))
-                    elif role == "assistant":
-                        # For assistant messages, add to both input_ids and labels, append EOS token
-                        assistant_ids = self.tokenizer.encode(
-                            f"@@ Response\n{content}</s>", add_special_tokens=False
-                        )
-
-                        input_ids.extend(assistant_ids)
-                        labels.extend(assistant_ids)
-
-                # Truncate or pad sequences
-                max_length = 1024
-                if len(input_ids) > max_length:
-                    input_ids = input_ids[:max_length]
-                    labels = labels[:max_length]
-                else:
-                    padding_length = max_length - len(input_ids)
-                    input_ids.extend([self.tokenizer.pad_token_id] * padding_length)
-                    labels.extend([-100] * padding_length)
-
-                # Convert to tensors
-                input_ids = torch.tensor(input_ids)
-                labels = torch.tensor(labels)
-
-                attention_mask = (input_ids != self.tokenizer.pad_token_id).long()
-
-                return {
-                    "input_ids": input_ids,
-                    "labels": labels,
-                    "attention_mask": attention_mask,
-                }
-
             self.train_dataset = load_dataset(
-                "m-a-p/Code-Feedback", split="train[:100000]"
+                "m-a-p/CodeFeedback-Filtered-Instruction", split="train[:100000]"
             )
-            self.train_subset = self.train_dataset.map(preprocess_function)
+            self.train_subset = self.train_dataset.map(
+                preprocess_codefeedback_instructed
+            )
             self.train_subset.set_format(
                 type="torch", columns=["input_ids", "labels", "attention_mask"]
             )
