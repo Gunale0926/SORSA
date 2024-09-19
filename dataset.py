@@ -180,3 +180,88 @@ class MetaMathQADataset(Dataset):
             "attention_mask": attention_mask_padded,
             "labels": labels_padded,
         }
+
+
+def preprocess_codefeedback(example, tokenizer, max_length=512):
+    input_ids = []
+    labels = []
+
+    for message in example["messages"]:
+        role = message["role"]
+        content = message["content"]
+
+        if role == "user":
+            # For user messages, add to input_ids and set labels to -100
+            user_ids = tokenizer.encode(
+                f"@@ Instruction\n{content}", add_special_tokens=False
+            )
+            input_ids.extend(user_ids)
+            labels.extend([-100] * len(user_ids))
+        elif role == "assistant":
+            # For assistant messages, add to both input_ids and labels, append EOS token
+            assistant_ids = tokenizer.encode(
+                f"@@ Response\n{content}</s>", add_special_tokens=True
+            )
+
+            input_ids.extend(assistant_ids)
+            labels.extend(assistant_ids)
+
+    # Truncate or pad sequences
+    if len(input_ids) > max_length:
+        input_ids = input_ids[:max_length]
+        labels = labels[:max_length]
+    else:
+        padding_length = max_length - len(input_ids)
+        input_ids.extend([tokenizer.pad_token_id] * padding_length)
+        labels.extend([-100] * padding_length)
+
+    # Convert to tensors
+    input_ids = torch.tensor(input_ids)
+    labels = torch.tensor(labels)
+
+    attention_mask = (input_ids != tokenizer.pad_token_id).long()
+
+    return {
+        "input_ids": input_ids,
+        "labels": labels,
+        "attention_mask": attention_mask,
+    }
+
+
+def preprocess_codefeedback_instructed(example, tokenizer, max_length=512):
+    input_ids = []
+    labels = []
+
+    user_ids = tokenizer.encode(
+        f"@@ Instruction\n{example['query']}", add_special_tokens=False
+    )
+    input_ids.extend(user_ids)
+    labels.extend([-100] * len(user_ids))
+
+    assistant_ids = tokenizer.encode(
+        f"@@ Response\n{example['answer']}</s>", add_special_tokens=True
+    )
+
+    input_ids.extend(assistant_ids)
+    labels.extend(assistant_ids)
+
+    # Truncate or pad sequences
+    if len(input_ids) > max_length:
+        input_ids = input_ids[:max_length]
+        labels = labels[:max_length]
+    else:
+        padding_length = max_length - len(input_ids)
+        input_ids.extend([tokenizer.pad_token_id] * padding_length)
+        labels.extend([-100] * padding_length)
+
+    # Convert to tensors
+    input_ids = torch.tensor(input_ids)
+    labels = torch.tensor(labels)
+
+    attention_mask = (input_ids != tokenizer.pad_token_id).long()
+
+    return {
+        "input_ids": input_ids,
+        "labels": labels,
+        "attention_mask": attention_mask,
+    }
