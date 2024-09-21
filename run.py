@@ -212,7 +212,7 @@ elif args.train:
         model=config.model,
         args=config.training_arguments,
         data_collator=lambda x: (
-            collate_fn(x, config.tokenizer) if args.metamath else None
+            collate_fn(x, config.tokenizer)
         ),
         train_dataset=config.train_dataset,
     )
