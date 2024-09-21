@@ -76,6 +76,7 @@ def remove_boxed(s):
 
 
 def preprocess_metamathqa(item, tokenizer, max_length=512):
+    # Same implementation with PiSSA
     question = item["query"]
     completion = item["response"]
     text = f"Below is an instruction that describes a task. Write a response that appropriately completes the request.\n\n### Instruction:\n{question}\n\n### Response:"
@@ -216,11 +217,12 @@ def preprocess_codefeedback(example, tokenizer, max_length=512):
 
 
 def preprocess_codefeedback_instructed(example, tokenizer, max_length=512):
+    # Self implementation
     input_ids = []
     labels = []
 
     user_ids = tokenizer.encode(
-        f"@@ Instruction\n{example['query']}\n\n",
+        f"@@ Instruction\n{example['query']}\n\n@@ Response\n",
         add_special_tokens=False,
         truncation=True,
         max_length=max_length,
@@ -229,12 +231,11 @@ def preprocess_codefeedback_instructed(example, tokenizer, max_length=512):
     labels.extend([-100] * len(user_ids))
 
     assistant_ids = tokenizer.encode(
-        f"@@ Response\n{example['answer']}</s>",
-        add_special_tokens=True,
+        f"{example['answer']}</s>",
+        add_special_tokens=False,
         truncation=True,
         max_length=max_length,
     )
-
     input_ids.extend(assistant_ids)
     labels.extend(assistant_ids)
 

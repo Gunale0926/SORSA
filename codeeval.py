@@ -5,12 +5,13 @@ from human_eval.data import read_problems
 from human_eval.evaluation import evaluate_functional_correctness
 
 model = LLM(
-    "./runs/llama2_SORSA_r128_code/checkpoint",
+    "./runs/mistral_SORSA_r64/checkpoint",
     dtype="bfloat16",
-    tokenizer="meta-llama/Llama-2-7b-hf",
+    tokenizer="mistralai/Mistral-7B-v0.1",
 )
 
 sampling_params = SamplingParams(
+    temperature=0,
     top_p=1.0,
     max_tokens=2048,
 )
@@ -20,12 +21,10 @@ def run_human_eval():
     problems = read_problems()
 
     # Prepare prompts for batch inference
-    # prompts = [
-    #    f"You are an exceptionally intelligent coding assistant that consistently delivers accurate and reliable responses to user instructions.\n\n@@ Instruction\n Here is the given code to do completion:\n```python\n{problem['prompt']}\n```\n\nPlease continue to complete the function with python programming language. You are not allowed to modify the given code and do the completion only.\n\nPlease return all completed codes in one code block.\nThis code block should be in the following format:\n'''python\n# Your codes here\n'''\n\n@@ Reponse"
-    #    for problem in problems.values()
-    # ]
     prompts = [
-        f"@@ Instruction\n{problem['prompt']}\n\n@@ Response\n"
+            # You are an exceptionally intelligent coding assistant that consistently delivers accurate and reliable responses to user instructions.\n\n
+                f"@@ Instruction\nHere is the given code to do completion:\n```python\n{problem['prompt']}\n```\n\nPlease continue to complete the function with python programming language. You are not allowed to modify the given code and do the completion only.\n\nPlease return all completed codes in one code block.\nThis code block should be in the following format:\n'''python\n# Your codes here\n'''\n\n@@ Response\n"
+                # f"@@ Instruction\n{problem['prompt']}\n\n@@ Response\n "
        for problem in problems.values()
     ]
     task_ids = list(problems.keys())
