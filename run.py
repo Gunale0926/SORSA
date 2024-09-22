@@ -211,9 +211,7 @@ elif args.train:
     trainer = Trainer(
         model=config.model,
         args=config.training_arguments,
-        data_collator=lambda x: (
-            collate_fn(x, config.tokenizer)
-        ),
+        data_collator=lambda x: (collate_fn(x, config.tokenizer)),
         train_dataset=config.train_dataset,
     )
     print(f"Trainable Parameters: {trainer.get_num_trainable_parameters()}")

@@ -3,11 +3,25 @@ import re
 from vllm import LLM, SamplingParams
 from human_eval.data import read_problems
 from human_eval.evaluation import evaluate_functional_correctness
+import argparse
+
+parser = argparse.ArgumentParser(
+    prog="Human Evaluation",
+)
+
+parser.add_argument(
+    "--checkpoint", type=str, default="./runs/mistral_SORSA_r64/checkpoint"
+)
+parser.add_argument("--tokenizer", type=str, default="mistralai/Mistral-7B-v0.1")
+parser.add_argument("--bf16", action="store_true")
+parser.add_argument("--fp16", action="store_true")
+
+args = parser.parse_args()
 
 model = LLM(
-    "./runs/mistral_SORSA_r64/checkpoint",
-    dtype="bfloat16",
-    tokenizer="mistralai/Mistral-7B-v0.1",
+    model_name=args.checkpoint,
+    dtype="bfloat16" if args.bf16 else "float16" if args.fp16 else "float32",
+    tokenizer_name=args.tokenizer,
 )
 
 sampling_params = SamplingParams(
@@ -22,10 +36,10 @@ def run_human_eval():
 
     # Prepare prompts for batch inference
     prompts = [
-            # You are an exceptionally intelligent coding assistant that consistently delivers accurate and reliable responses to user instructions.\n\n
-                f"@@ Instruction\nHere is the given code to do completion:\n```python\n{problem['prompt']}\n```\n\nPlease continue to complete the function with python programming language. You are not allowed to modify the given code and do the completion only.\n\nPlease return all completed codes in one code block.\nThis code block should be in the following format:\n'''python\n# Your codes here\n'''\n\n@@ Response\n"
-                # f"@@ Instruction\n{problem['prompt']}\n\n@@ Response\n "
-       for problem in problems.values()
+        # You are an exceptionally intelligent coding assistant that consistently delivers accurate and reliable responses to user instructions.\n\n
+        f"@@ Instruction\nHere is the given code to do completion:\n```python\n{problem['prompt']}\n```\n\nPlease continue to complete the function with python programming language. You are not allowed to modify the given code and do the completion only.\n\nPlease return all completed codes in one code block.\nThis code block should be in the following format:\n'''python\n# Your codes here\n'''\n\n@@ Response\n"
+        # f"@@ Instruction\n{problem['prompt']}\n\n@@ Response\n "
+        for problem in problems.values()
     ]
     task_ids = list(problems.keys())
 
@@ -37,7 +51,7 @@ def run_human_eval():
     for task_id, output in zip(task_ids, outputs):
         completion = output.outputs[0].text
         pattern = r"```python\s*([\s\S]*?)\s```"
-        match = re.search(pattern,completion)
+        match = re.search(pattern, completion)
         if match is not None:
             match = match.group(1)
         else:
