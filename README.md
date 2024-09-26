@@ -12,21 +12,21 @@ Singular Values and Orthonormal Regularized Singular Vectors Adaptation, or **SO
 
 ### Llama 2 7B
 
-| Method  | Trainable<br />Parameters | MATH        | GSM-8K       |
-| ------- | ------------------------- | ----------- | ------------ |
-| Full FT | 6738M                     | 7.22        | 49.05        |
-| LoRA    | **320M**                  | 5.50        | 42.30        |
-| PiSSA   | **320M**                  | <u>7.44</u> | <u>53.07</u> |
-| SORSA   | **320M**                  | **10.36**   | **56.03**    |
+| Method  | Trainable<br />Parameters | MATH        | GSM-8K       | HumanEval    |
+| ------- | ------------------------- | ----------- | ------------ | ------------ |
+| Full FT | 6738M                     | 7.22        | 49.05        | 21.34        |
+| LoRA    | **320M**                  | 5.50        | 42.30        | 18.29        |
+| PiSSA   | **320M**                  | <u>7.44</u> | <u>53.07</u> | <u>21.95</u> |
+| SORSA   | **320M**                  | **10.36**   | **56.03**    | **24.39**    |
 
 ### Mistral 7B v0.1
 
-| Method  | Trainable<br />Parameters | MATH         | GSM-8K      |
-| ------- | ------------------------- | ------------ | ----------- |
-| Full FT | 7242M                     | 18.60        | 67.02       |
-| LoRA    | **168M**                  | 19.68        | 67.70       |
-| PiSSA   | **168M**                  | <u>21.54</u> | <u>72.86</u>|
-| SORSA   | **168M**                  | **21.86**    | **73.09**   |
+| Method  | Trainable<br />Parameters | MATH         | GSM-8K       | HumanEval    |
+| ------- | ------------------------- | ------------ | ------------ | ------------ |
+| Full FT | 7242M                     | 18.60        | 67.02        | 45.12        |
+| LoRA    | **168M**                  | 19.68        | 67.70        | 43.90        |
+| PiSSA   | **168M**                  | <u>21.54</u> | <u>72.86</u> | <u>46.95</u> |
+| SORSA   | **168M**                  | **21.86**    | **73.09**    | **47.56**    |
 
 
 ## Reproduce the Experiments
@@ -42,7 +42,7 @@ Download the MetaMathQA dataset from [huggingface](https://huggingface.co/datase
 Run the `run.py` using hyperparameters in the paper to train:
 
 ```bash
-python3 run.py --run-path ./runs --name llama2_sorsa_r128 --model meta-llama/Llama-2-7b-hf --lr 3e-5 --wd 0.00 --batch-size 2 --accum-step 64 --gamma 4e-4  --rank 128 --epochs 1 --train --bf16 --tf32
+python3 run.py --run-path ./runs --name llama2_sorsa_r128 --model meta-llama/Llama-2-7b-hf --lr 3e-5 --wd 0.00 --batch-size 2 --accum-step 64 --gamma 4e-4  --rank 128 --epochs 1 --train --bf16 --tf32 --metamath
 ```
 
 After training, run the following command to merge the adapter to the base model:
@@ -61,6 +61,12 @@ Run following command to evaluate on MATH:
 
 ```bash
 python3 run.py --run-path ./runs --name llama2_sorsa_r128 --test --math --bf16
+```
+
+Run following command to evaluate on HumanEval:
+
+```bash
+python3 codeeval.py --checkpoint llama2_sorsa_r128/checkpoint --tokenizer meta-llama/Llama-2-7b-hf --bf16
 ```
 
 
