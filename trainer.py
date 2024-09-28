@@ -15,8 +15,8 @@
 """
 The Trainer class, to easily train a 🤗 Transformers from scratch or finetune it on a new task.
 """
-from models import SORSATrainingArguments
-from sorsalib.layers import calc_ortho
+from sorsalib.model import SORSATrainingArguments
+from sorsalib.layer import calc_ortho
 
 import contextlib
 import copy

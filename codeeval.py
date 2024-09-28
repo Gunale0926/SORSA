@@ -19,10 +19,12 @@ parser.add_argument("--fp16", action="store_true")
 args = parser.parse_args()
 
 model = LLM(
-    model_name=args.checkpoint,
+    args.checkpoint,
     dtype="bfloat16" if args.bf16 else "float16" if args.fp16 else "float32",
-    tokenizer_name=args.tokenizer,
+    tokenizer=args.tokenizer,
 )
+
+print(args.tokenizer)
 
 sampling_params = SamplingParams(
     temperature=0,

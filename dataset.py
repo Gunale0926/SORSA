@@ -110,67 +110,30 @@ def preprocess_metamathqa(item, tokenizer, max_length=512):
 
 
 def collate_fn(batch, tokenizer):
+
     input_ids = [item["input_ids"] for item in batch]
     attention_mask = [item["attention_mask"] for item in batch]
     labels = [item["labels"] for item in batch]
 
     max_length = max(x.size(0) for x in input_ids)
 
-    if tokenizer.padding_side == "right":
-        # Pad sequences to the right
-        input_ids_padded = torch.nn.utils.rnn.pad_sequence(
-            input_ids, batch_first=True, padding_value=tokenizer.pad_token_id
-        )
-        attention_mask_padded = torch.nn.utils.rnn.pad_sequence(
-            attention_mask, batch_first=True, padding_value=0
-        )
-        labels_padded = torch.nn.utils.rnn.pad_sequence(
-            labels, batch_first=True, padding_value=-100
-        )
-    else:
-        # Pad sequences to the left
-        input_ids_padded = []
-        attention_mask_padded = []
-        labels_padded = []
-
-        for input_id, attn_mask, label in zip(input_ids, attention_mask, labels):
-            padding_length = max_length - input_id.size(0)
-
-            input_ids_padded.append(
-                torch.cat(
-                    (
-                        torch.full(
-                            (padding_length,),
-                            tokenizer.pad_token_id,
-                            dtype=torch.long,
-                        ),
-                        input_id,
-                    ),
-                    dim=0,
-                )
-            )
-            attention_mask_padded.append(
-                torch.cat(
-                    (torch.zeros(padding_length, dtype=torch.long), attn_mask),
-                    dim=0,
-                )
-            )
-            labels_padded.append(
-                torch.cat(
-                    (torch.full((padding_length,), -100, dtype=torch.long), label),
-                    dim=0,
-                )
-            )
-
-        input_ids_padded = torch.stack(input_ids_padded, dim=0)
-        attention_mask_padded = torch.stack(attention_mask_padded, dim=0)
-        labels_padded = torch.stack(labels_padded, dim=0)
-
-    return {
+    input_ids_padded = torch.nn.utils.rnn.pad_sequence(
+        input_ids, batch_first=True, padding_value=tokenizer.pad_token_id
+    )
+    attention_mask_padded = torch.nn.utils.rnn.pad_sequence(
+        attention_mask, batch_first=True, padding_value=0
+    )
+    labels_padded = torch.nn.utils.rnn.pad_sequence(
+        labels, batch_first=True, padding_value=-100
+    )
+    
+    batch = {
         "input_ids": input_ids_padded,
         "attention_mask": attention_mask_padded,
         "labels": labels_padded,
     }
+
+    return batch
 
 
 def preprocess_codefeedback(example, tokenizer, max_length=512):

@@ -1,8 +1,7 @@
 from datasets import load_dataset
 import torch
-from auto_model import SORSAAutoModelForCausalLM, SORSAAutoConfig
-from models import SORSATrainingArguments
-from transformers import AutoTokenizer, AutoConfig
+from sorsalib.model import SORSAModel, SORSAConfig, SORSATrainingArguments
+from transformers import AutoTokenizer, AutoModelForCausalLM, AutoConfig
 from dataset import (
     preprocess_metamathqa,
     preprocess_codefeedback,
@@ -24,13 +23,14 @@ parser = argparse.ArgumentParser(
 
 parser.add_argument("-n", "--name", type=str, default="SORSA")
 parser.add_argument("-r", "--rank", type=int, default=4)
-parser.add_argument("-", "--length", type=int, default=512)
+parser.add_argument("-l", "--length", type=int, default=512)
 parser.add_argument("-a", "--alpha", type=float, default=None)
 parser.add_argument("-g", "--gamma", type=float, default=0.1)
 parser.add_argument("-d", "--dropout", type=float, default=0.0)
 parser.add_argument("-t", "--train", action="store_true")
 parser.add_argument("-T", "--test", action="store_true")
 parser.add_argument("-m", "--merge", action="store_true")
+parser.add_argument("--split", type=str, default="")
 parser.add_argument("--metamath", action="store_true")
 parser.add_argument("--code", action="store_true")
 parser.add_argument("--bf16", action="store_true")
@@ -83,12 +83,12 @@ class TrainerConfig:
         if args.tokenizer is None:
             args.tokenizer = args.model
         self.tokenizer = AutoTokenizer.from_pretrained(
-            args.model, cache_dir=args.cache_path, use_fast=True
+            args.model, cache_dir=args.cache_path, trust_remote_code=True
         )
         self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
         if args.metamath:
             self.train_dataset = load_dataset(
-                "meta-math/MetaMathQA", split="train[:100000]"
+                    "meta-math/MetaMathQA", split=f"train{args.split}"
             )
             self.train_dataset = self.train_dataset.map(
                 lambda x: preprocess_metamathqa(x, self.tokenizer, args.length)
@@ -96,7 +96,7 @@ class TrainerConfig:
 
         elif args.code:
             self.train_dataset = load_dataset(
-                "m-a-p/CodeFeedback-Filtered-Instruction", split="train[:100000]"
+                "m-a-p/CodeFeedback-Filtered-Instruction", split=f"train{args.split}"
             )
             self.train_dataset = self.train_dataset.map(
                 lambda x: preprocess_codefeedback_instructed(
@@ -106,45 +106,47 @@ class TrainerConfig:
         self.train_dataset.set_format(
             type="torch", columns=["input_ids", "labels", "attention_mask"]
         )
+        # target = [
+        #     "q_proj",
+        #     "o_proj",
+        #     "k_proj",
+        #     "v_proj",
+        #     "gate_proj",
+        #     "up_proj",
+        #     "down_proj",
+        # ]
         target = [
-            "q_proj",
-            "o_proj",
-            "k_proj",
-            "v_proj",
-            "gate_proj",
-            "up_proj",
-            "down_proj",
+            "attention",
+            "feed_forward"
         ]
-        config = SORSAAutoConfig.from_pretrained(
-            args.model,
-            target=target,
+        self.config = SORSAConfig(
+            base_model_name_or_path=args.model,
+            target_modules=target,
             rank=self.rank,
             alpha=args.alpha,
             sorsa_dropout=self.dropout,
         )
-        self.loaded = False
         # Load model in ALL float32 (residual is quantized to bf16)
         if os.path.isdir(args.svd_cache_path):
             print("Loading SVDed Model...")
-            self.model = SORSAAutoModelForCausalLM.from_pretrained(
+            self.model = SORSAModel.from_pretrained(
                 pretrained_model_name_or_path=args.svd_cache_path,
-                config=config,
             )
         else:
             print("Start from Pretrained Model...")
-            self.model = SORSAAutoModelForCausalLM.from_pretrained(
-                pretrained_model_name_or_path=args.model,
-                cache_dir=args.cache_path,
-                config=config,
-            )
+            self.model = SORSAModel(self.config)
             self.model.to("cuda")
-            self.model._sorsa_init()
+            self.model.sorsa_init()
             self.model.save_pretrained(args.svd_cache_path)
+
+        self.model.train()
+
         for name, param in self.model.named_parameters():
             if "sorsa_" in name:
                 param.requires_grad = True
             else:
                 param.requires_grad = False
+
 
         self.training_arguments = SORSATrainingArguments(
             run_name=args.name,
@@ -207,7 +209,6 @@ if args.test:
 
 elif args.train:
     config = TrainerConfig(args)
-    print(config.training_arguments)
     trainer = Trainer(
         model=config.model,
         args=config.training_arguments,
@@ -215,21 +216,16 @@ elif args.train:
         train_dataset=config.train_dataset,
     )
     print(f"Trainable Parameters: {trainer.get_num_trainable_parameters()}")
-    # trainer.train(resume_from_checkpoint=True)
     trainer.train()
     trainer.save_model(config.checkpoint_path)
 
 elif args.merge:
     run_path = f"{args.run_path}/{args.name}"
     checkpoint_path = f"{run_path}/checkpoint"
-    model = SORSAAutoModelForCausalLM.from_pretrained(checkpoint_path)
+    model = SORSAModel.from_pretrained(checkpoint_path)
     model.to("cuda")
     model.sorsa_merge(True)
-    for name, param in model.named_parameters():
-        if "sorsa_" in name:
-            model.set_submodule(name, None)
-    del model.replaced
-    model.save_pretrained(checkpoint_path, save_config=False)
+    model.save_pretrained(checkpoint_path, save_adapters_only=True)
     if args.local is False:
         env = dotenv_values(".env")
         login(token=env["hf"])
