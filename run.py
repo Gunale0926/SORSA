@@ -19,7 +19,7 @@ from trainer import Trainer
 
 CONFIG = {"lora": LoRAConfig, "pissa": LoRAConfig, "sorsa": SORSAConfig}
 MODEL = {"lora": LoRAModel, "pissa": LoRAModel, "sorsa": SORSAModel}
-PREFIX  = {"lora": "lora_", "pissa":"lora_", "sorsa": "sorsa_"}
+PREFIX = {"lora": "lora_", "pissa": "lora_", "sorsa": "sorsa_"}
 
 parser = argparse.ArgumentParser(
     prog="SORSA Runner",
@@ -48,9 +48,13 @@ parser.add_argument("--train-dataset", choices=["metamath", "code"], default="me
 parser.add_argument("--split", type=str, default="")
 
 parser.add_argument("--test-dataset", choices=["gsm-8k", "math"], default="gsm-8k")
-parser.add_argument("--test-precision", choices=["bf16", "fp16", "fp32"], default="bf16")
+parser.add_argument(
+    "--test-precision", choices=["bf16", "fp16", "fp32"], default="bf16"
+)
 
-parser.add_argument("--mix-precision", choices=["bf16", "fp16", "fp32", "tf32"], action="append")
+parser.add_argument(
+    "--mix-precision", choices=["bf16", "fp16", "fp32", "tf32"], action="append"
+)
 parser.add_argument("--grad-cp", type=float, default=1.0)
 parser.add_argument("--scheduler", type=str, default="cosine")
 parser.add_argument("--warmup", type=float, default=0.03)
@@ -69,7 +73,6 @@ parser.add_argument("--local", action="store_true")
 
 
 args = parser.parse_args()
-
 
 
 class TrainerConfig:
@@ -104,7 +107,7 @@ class TrainerConfig:
         self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
         if "metamath" in args.train_dataset:
             self.train_dataset = load_dataset(
-                    "meta-math/MetaMathQA", split=f"train{args.split}"
+                "meta-math/MetaMathQA", split=f"train{args.split}"
             )
             self.train_dataset = self.train_dataset.map(
                 lambda x: preprocess_metamathqa(x, self.tokenizer, args.length)
@@ -186,9 +189,9 @@ class TrainerConfig:
             learning_rate=args.lr,
             max_grad_norm=args.grad_cp,
             gamma=self.gamma,
-            bf16='bf16' in args.mix_precision,
-            fp16='fp16' in args.mix_precision,
-            tf32='tf32' in args.mix_precision,
+            bf16="bf16" in args.mix_precision,
+            fp16="fp16" in args.mix_precision,
+            tf32="tf32" in args.mix_precision,
         )
 
 
@@ -205,9 +208,9 @@ if args.test:
     run_path = f"{args.run_path}/{args.name}"
     checkpoint_path = f"{run_path}/checkpoint"
     precision_mapping = {
-        'bf16': 'bfloat16',
-        'fp16': 'float16',
-        'fp32': 'float32',
+        "bf16": "bfloat16",
+        "fp16": "float16",
+        "fp32": "float32",
     }
     if "math" in args.test_dataset:
         dataset = "datasets/MATH_test.jsonl"
@@ -215,7 +218,7 @@ if args.test:
             model=checkpoint_path,
             tokenizer=args.tokenizer,
             dataset=dataset,
-            precision=precision_mapping[args.test_precision]
+            precision=precision_mapping[args.test_precision],
         )
     elif "gsm-8k" in args.test_dataset:
         dataset = "datasets/test-00000-of-00001.parquet"
@@ -223,7 +226,7 @@ if args.test:
             model=checkpoint_path,
             tokenizer=args.tokenizer,
             dataset=dataset,
-            precision=precision_mapping[args.test_precision]
+            precision=precision_mapping[args.test_precision],
         )
 
 elif args.train:

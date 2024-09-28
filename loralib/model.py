@@ -40,7 +40,9 @@ class LoRAModel(PreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
         self.config = config
-        self.model = AutoModelForCausalLM.from_pretrained(config.base_model_name_or_path, trust_remote_code=True)
+        self.model = AutoModelForCausalLM.from_pretrained(
+            config.base_model_name_or_path, trust_remote_code=True
+        )
         self._replace_modules()
 
     def set_submodule(self, target: str, module: torch.nn.Module):
@@ -76,13 +78,13 @@ class LoRAModel(PreTrainedModel):
                 module, nn.Linear
             ):
                 lora_module = LoRALinear(
-                        in_features=module.in_features,
-                        out_features=module.out_features,
-                        r=self.config.rank,
-                        alpha=self.config.alpha,
-                        bias=module.bias is not None,
-                        lora_dropout=self.config.lora_dropout,
-                    )
+                    in_features=module.in_features,
+                    out_features=module.out_features,
+                    r=self.config.rank,
+                    alpha=self.config.alpha,
+                    bias=module.bias is not None,
+                    lora_dropout=self.config.lora_dropout,
+                )
                 with torch.no_grad():
                     lora_module.weight.copy_(module.weight)
                     if module.bias is not None:

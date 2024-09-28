@@ -77,9 +77,6 @@ class Linear(SORSALayer, nn.Module):
                 torch.bfloat16
             )  # Quantize to BF16 (Align the same setup with PiSSA)
 
-    def train(self, mode: bool = True):
-        pass
-
     def _merge(self, mode: bool):
         if mode:
             if self.merge_weights and not self.merged:

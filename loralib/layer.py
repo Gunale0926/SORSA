@@ -43,7 +43,7 @@ class Linear(nn.Module, LoRALayer):
         merge_weights: bool = True,
         **kwargs
     ):
-        nn.Module.__init__()
+        nn.Module.__init__(self)
         LoRALayer.__init__(
             self,
             r=r,

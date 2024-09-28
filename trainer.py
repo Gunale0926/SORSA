@@ -15,8 +15,7 @@
 """
 The Trainer class, to easily train a 🤗 Transformers from scratch or finetune it on a new task.
 """
-from sorsalib.model import SORSATrainingArguments
-from sorsalib.layer import calc_ortho
+from sorsalib import SORSATrainingArguments, calc_ortho
 
 import contextlib
 import copy
@@ -2584,8 +2583,6 @@ class Trainer:
                 with self.accelerator.accumulate(model):
                     tr_loss_step = self.training_step(model, inputs)
 
-                    
-
                 if (
                     args.logging_nan_inf_filter
                     and not is_torch_xla_available()
@@ -2679,7 +2676,13 @@ class Trainer:
                     )
 
                     self._maybe_log_save_evaluate(
-                        tr_loss, ortho_loss, grad_norm, model, trial, epoch, ignore_keys_for_eval
+                        tr_loss,
+                        ortho_loss,
+                        grad_norm,
+                        model,
+                        trial,
+                        epoch,
+                        ignore_keys_for_eval,
                     )
                 else:
                     self.control = self.callback_handler.on_substep_end(
@@ -2705,7 +2708,13 @@ class Trainer:
                 args, self.state, self.control
             )
             self._maybe_log_save_evaluate(
-                tr_loss, ortho_loss, grad_norm, model, trial, epoch, ignore_keys_for_eval
+                tr_loss,
+                ortho_loss,
+                grad_norm,
+                model,
+                trial,
+                epoch,
+                ignore_keys_for_eval,
             )
 
             if DebugOption.TPU_METRICS_DEBUG in self.args.debug:

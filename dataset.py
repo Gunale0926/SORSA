@@ -74,6 +74,7 @@ def remove_boxed(s):
     except:
         return None
 
+
 def preprocess_metamathqa(item, tokenizer, max_length):
     # Identical replica with PiSSA
     question = item["query"]
@@ -85,20 +86,24 @@ def preprocess_metamathqa(item, tokenizer, max_length):
         max_length=max_length,
         truncation=True,
         return_tensors="pt",
-        add_special_tokens=False
+        add_special_tokens=False,
     )
     ans = tokenizer.encode_plus(
         text=f"{target_text}",
         max_length=max_length,
         truncation=True,
         return_tensors="pt",
-        add_special_tokens=False
+        add_special_tokens=False,
     )
 
     length = query["input_ids"].size(-1)
 
-    input_ids = torch.concat((query["input_ids"].squeeze(0),ans["input_ids"].squeeze(0)))
-    attention_mask = torch.concat((query["attention_mask"].squeeze(0),ans["attention_mask"].squeeze(0)))
+    input_ids = torch.concat(
+        (query["input_ids"].squeeze(0), ans["input_ids"].squeeze(0))
+    )
+    attention_mask = torch.concat(
+        (query["attention_mask"].squeeze(0), ans["attention_mask"].squeeze(0))
+    )
 
     labels = torch.full_like(input_ids, fill_value=-100)
     labels[length:] = input_ids[length:]
@@ -128,7 +133,7 @@ def collate_fn(batch, tokenizer):
     labels_padded = torch.nn.utils.rnn.pad_sequence(
         labels, batch_first=True, padding_value=-100
     )
-    
+
     batch = {
         "input_ids": input_ids_padded,
         "attention_mask": attention_mask_padded,

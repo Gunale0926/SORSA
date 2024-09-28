@@ -4,12 +4,7 @@ from inference.util import is_equiv, last_boxed_only_string
 from vllm import LLM, SamplingParams
 
 
-def test_gsm(
-    model,
-    tokenizer,
-    dataset,
-    precision
-):
+def test_gsm(model, tokenizer, dataset, precision):
     correct = 0
     dataset = pd.read_parquet(dataset).to_dict(orient="records")
     sampling_params = SamplingParams(temperature=0, top_p=1.0, max_tokens=1024)
@@ -44,12 +39,7 @@ def extract_ans_for_math(completion):
         return None
 
 
-def test_math(
-    model,
-    tokenizer,
-    dataset,
-    precision
-):
+def test_math(model, tokenizer, dataset, precision):
     correct = 0
     dataset = pd.read_json(dataset, lines=True).to_dict(orient="records")
     sampling_params = SamplingParams(temperature=0, top_p=1.0, max_tokens=2048)
