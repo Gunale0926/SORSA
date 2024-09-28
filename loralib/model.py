@@ -1,70 +1,108 @@
-from typing import List
+import os
+import re
 import torch
-from transformers import LlamaForCausalLM
-from tqdm import tqdm
+import torch.nn as nn
+import torch.nn.functional as F
+from dataclasses import dataclass, field
+from typing import List, Any, Dict, Optional, Union
+from transformers import (
+    PreTrainedModel,
+    PretrainedConfig,
+    AutoModelForCausalLM,
+    TrainingArguments,
+)
+from loralib import Linear as LoRALinear
 
 
-class LoRALlamaForCausalLM(LlamaForCausalLM):
-    def __init__(self, config, target, rank, lora_dropout, lora_alpha=None):
-        super().__init__(config=config)
-        self.target = target
-        self.replaced = []
-        if lora_alpha is None:
-            lora_alpha = rank
-        self._lora_replace(rank, lora_dropout, lora_alpha)
+class LoRAConfig(PretrainedConfig):
+    model_type = "lora"
+
+    def __init__(
+        self,
+        base_model_name_or_path: Optional[str] = None,
+        rank: int = 4,
+        alpha: Optional[float] = None,
+        dropout: float = 0.0,
+        target_modules: List[str] = ["query", "key", "value"],
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+        self.base_model_name_or_path = base_model_name_or_path
+        self.rank = rank
+        self.alpha = alpha
+        self.dropout = dropout
+        self.target_modules = target_modules
+
+
+class LoRAModel(PreTrainedModel):
+    config_class = LoRAConfig
+
+    def __init__(self, config):
+        super().__init__(config)
+        self.config = config
+        self.model = AutoModelForCausalLM.from_pretrained(config.base_model_name_or_path, trust_remote_code=True)
+        self._replace_modules()
 
     def set_submodule(self, target: str, module: torch.nn.Module):
         atoms: List[str] = target.split(".")
         name = atoms.pop(-1)
-        mod: torch.nn.Module = self
+        mod = self
 
         for item in atoms:
-
             if not hasattr(mod, item):
                 raise AttributeError(
-                    mod._get_name() + " has no " "attribute `" + item + "`"
+                    mod._get_name() + " has no attribute `" + item + "`"
                 )
 
             mod = getattr(mod, item)
 
             if not isinstance(mod, torch.nn.Module):
-                raise AttributeError("`" + item + "` is not " "an nn.Module")
+                raise AttributeError("`" + item + "` is not an nn.Module")
 
         setattr(mod, name, module)
 
-    def _lora_replace(self, rank, lora_dropout, lora_alpha):
-        for t in self.target:
-            for name, module in self.named_modules():
-                if t in name and isinstance(module, torch.nn.Linear):
-                    self.replaced.append(name)
+    def forward(self, *args, **kwargs):
+        return self.model(*args, **kwargs)
 
-        for name in self.replaced:
-            self.set_submodule(
-                name,
-                lora(
-                    in_features=self.get_submodule(name).in_features,
-                    out_features=self.get_submodule(name).out_features,
-                    r=rank,
-                    bias=False if self.get_submodule(name).bias is None else True,
-                    lora_dropout=lora_dropout,
-                    lora_alpha=lora_alpha,
-                ),
-            )
+    def _replace_modules(self):
+        if isinstance(self.config.target_modules, list):
+            target_module_names = self.config.target_modules
+        elif isinstance(self.config.target_modules, dict):
+            target_module_names = list(self.config.target_modules.values())
+        else:
+            raise ValueError("target_modules must be a list or dict")
+        for name, module in self.named_modules():
+            if any(t in name for t in target_module_names) and isinstance(
+                module, nn.Linear
+            ):
+                lora_module = LoRALinear(
+                        in_features=module.in_features,
+                        out_features=module.out_features,
+                        r=self.config.rank,
+                        alpha=self.config.alpha,
+                        bias=module.bias is not None,
+                        lora_dropout=self.config.lora_dropout,
+                    )
+                with torch.no_grad():
+                    lora_module.weight.copy_(module.weight)
+                    if module.bias is not None:
+                        lora_module.bias.copy_(module.bias)
+                self.set_submodule(f"{name}", lora_module)
 
-    def pissa_init(self):
-        print(f"Start Initializing PiSSA Layers...")
-        progress_bar = tqdm(range(1, len(self.replaced) + 1))
-        for name in self.replaced:
-            self.get_submodule(name).init_pissa()
-            progress_bar.set_description(f"Initializing {name}")
-            progress_bar.update(1)
-        progress_bar.close()
+    def lora_init(self, pissa=False):
+        print("Initializing LoRA Adapters...")
+        for module in self.modules():
+            if isinstance(module, LoRALinear):
+                with torch.no_grad():
+                    if not pissa:
+                        module.lora_init()
+                    else:
+                        module.pissa_init()
 
-    def lora_init(self):
-        print(f"Start Initializing LoRA Layers...")
-        progress_bar = tqdm(range(1, len(self.replaced) + 1))
-        for name in self.replaced:
-            self.get_submodule(name).init_lora()
-            progress_bar.set_description(f"Initializing {name}")
-            progress_bar.update(1)
-        progress_bar.close()
+    def lora_merge(self, mode=True):
+        for module in self.modules():
+            if isinstance(module, LoRALinear):
+                module._merge(mode)
+
+    def get_parameters(self) -> List[nn.Parameter]:
+        return [p for n, p in self.named_parameters() if "lora_" in n]

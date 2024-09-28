@@ -1,23 +1,27 @@
 import torch
 from transformers import (
     LlamaForCausalLM,
-    get_cosine_schedule_with_warmup,
     LlamaTokenizerFast,
+    get_cosine_schedule_with_warmup,
 )
-from torch.utils.data import DataLoader, Subset
+from torch.utils.data import DataLoader
 import argparse
 from dotenv import dotenv_values
 from huggingface_hub import login
 import sys
 import os
 from transformers import set_seed
+from datasets import load_dataset
 
 sys.path.append(os.path.expanduser('../'))
 
-from models import LoRALlamaForCausalLM, SORSALlamaForCausalLM
-from auto_model import SORSAAutoModelForCausalLM, SORSAAutoConfig
-from dataset import MetaMathQADataset
+from sorsalib import SORSAModel, SORSAConfig
+from loralib import LoRAModel, LoRAConfig
 from analysis import analysis
+from dataset import (
+    preprocess_metamathqa,
+    collate_fn,
+)
 
 parser = argparse.ArgumentParser(
     prog="SORSA Analysis Runner",
@@ -88,18 +92,19 @@ class TrainerConfig:
         )
         self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
 
-        self.train_dataset = MetaMathQADataset(
-            file_path="../llama/datasets/MetaMathQA-395K.json",
-            tokenizer=self.tokenizer,
-            max_length=512,
+        
+        self.train_dataset = load_dataset(
+                "meta-math/MetaMathQA", split=f"train[:100000]"
         )
-        self.train_subset = Subset(self.train_dataset, range(0, 100000))
+        self.train_dataset = self.train_dataset.map(
+            lambda x: preprocess_metamathqa(x, self.tokenizer, args.length)
+        )
         self.train_loader = DataLoader(
-            self.train_subset,
+            self.train_dataset,
             batch_size=self.batch_size,
             shuffle=False,
             num_workers=0,
-            collate_fn=self.train_dataset.collate_fn,
+            collate_fn=lambda x: collate_fn(x, self.tokenizer),
         )
         self.num_batches = len(self.train_loader)
         self.total_steps = self.num_batches * self.num_epochs
@@ -128,33 +133,29 @@ class TrainerConfig:
                     self.weights.append(weight)
 
         if args.sorsa:
-            config = SORSAAutoConfig.from_pretrained(
-                llama_path,
-                target=target,
+            config = SORSAConfig(
+                base_model_name_or_path=llama_path,
+                target_modules=target,
                 rank=self.rank,
-                alpha=self.alpha,
+                alpha=args.alpha,
                 sorsa_dropout=self.dropout,
             )
             if os.path.isdir(self.checkpoint_path):
                 print("Loading Tuned Model...")
-                self.model = SORSALlamaForCausalLM.from_pretrained(
-                    self.checkpoint_path,
-                    config=config
+                self.model = SORSAModel.from_pretrained(
+                    pretrained_model_name_or_path=args.svd_cache_path,
                 )
             elif os.path.isdir(args.svd_cache_path):
                 print("Loading SVDed Model...")
-                self.model = SORSALlamaForCausalLM.from_pretrained(
-                    args.svd_cache_path,
-                    config=config
+                self.model = SORSAModel.from_pretrained(
+                    pretrained_model_name_or_path=args.svd_cache_path,
                 )
             else:
                 print("Start from Pretrained Model...")
-                self.model = SORSALlamaForCausalLM.from_pretrained(
-                    pretrained_model_name_or_path=llama_path,
-                    config=config
-                )
-                self.model._sorsa_init()
-                # self.model.save_pretrained(args.svd_cache_path)
+                self.model = SORSAModel(self.config)
+                self.model.to(device)
+                self.model.sorsa_init()
+                self.model.save_pretrained(args.svd_cache_path)
             self.model.to(self.device)
             self.sorsa_params = []
             for name, param in self.model.named_parameters():
@@ -164,40 +165,32 @@ class TrainerConfig:
                 else:
                     param.requires_grad = False
         elif args.lora or args.pissa:
+            config = LoRAConfig(
+                base_model_name_or_path=llama_path,
+                target_modules=target,
+                rank=self.rank,
+                alpha=args.alpha,
+                lora_dropout=self.dropout,
+            )
             if os.path.isdir(self.checkpoint_path):
                 print("Loading Tuned Model...")
-                self.model = LoRALlamaForCausalLM.from_pretrained(
+                self.model = LoRAModel.from_pretrained(
                     self.checkpoint_path,
-                    target=target,
-                    rank=self.rank,
-                    lora_dropout=self.dropout,
-                    lora_alpha=args.alpha
                 )
             elif args.pissa and os.path.isdir(args.svd_cache_path):
                 print("Loading SVDed Model...")
-                self.model = LoRALlamaForCausalLM.from_pretrained(
+                self.model = LoRAModel.from_pretrained(
                     args.svd_cache_path,
-                    target=target,
-                    rank=self.rank,
-                    lora_dropout=self.dropout,
-                    lora_alpha=args.alpha
                 )
             else:
                 print("Start from Pretrained Model...")
-                self.model = LoRALlamaForCausalLM.from_pretrained(
-                    pretrained_model_name_or_path=llama_path,
-                    cache_dir=cache_path,
-                    target=target,
-                    rank=self.rank,
-                    lora_dropout=self.dropout,
-                    lora_alpha=args.alpha
-                )
+                self.model = LoRAModel(self.config)
+                self.model.to(device)
                 if args.pissa:
                     self.model.pissa_init()
                     self.model.save_pretrained(args.svd_cache_path)
                 else:
                     self.model.lora_init()
-            self.model.to(self.device)
             self.lora_params = []
             for name, param in self.model.named_parameters():
                 if "lora_" in name:
@@ -220,13 +213,14 @@ class TrainerConfig:
             for name, param in self.model.named_parameters():
                 param.requires_grad = False
 
-            for t in target:
-                for name, module in self.model.named_modules():
-                    if t in name and isinstance(module, torch.nn.Linear):
-                        weight = f"{name}.weight"
-                        param = self.model.get_parameter(weight)
-                        param.requires_grad = True
-                        self.ft_params.append(param)
+            for name, module in self.model.named_modules():
+                if any(t in name for t in targets) and isinstance(
+                    module, nn.Linear
+                ):
+                    weight = f"{name}.weight"
+                    param = self.model.get_parameter(weight)
+                    param.requires_grad = True
+                    self.ft_params.append(param)
 
         self.model.weights = self.weights
 

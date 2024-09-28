@@ -1,5 +1,3 @@
-import os
-import re
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -11,7 +9,6 @@ from transformers import (
     AutoModelForCausalLM,
     TrainingArguments,
 )
-from safetensors.torch import save_file, load_file
 from sorsalib.layer import Linear as SORSALinear
 
 
@@ -23,7 +20,7 @@ class SORSAConfig(PretrainedConfig):
         base_model_name_or_path: Optional[str] = None,
         rank: int = 4,
         alpha: Optional[float] = None,
-        sorsa_dropout: float = 0.0,
+        dropout: float = 0.0,
         target_modules: List[str] = ["query", "key", "value"],
         **kwargs,
     ):
@@ -31,7 +28,7 @@ class SORSAConfig(PretrainedConfig):
         self.base_model_name_or_path = base_model_name_or_path
         self.rank = rank
         self.alpha = alpha
-        self.sorsa_dropout = sorsa_dropout
+        self.dropout = dropout
         self.target_modules = target_modules
 
 
@@ -97,7 +94,12 @@ class SORSAModel(PreTrainedModel):
                 with torch.no_grad():
                     module.sorsa_init()
 
-    def get_sorsa_parameters(self) -> List[nn.Parameter]:
+    def merge(self, mode=True):
+        for module in self.modules():
+            if isinstance(module, SORSALinear):
+                module._merge(mode)
+
+    def get_parameters(self) -> List[nn.Parameter]:
         return [p for n, p in self.named_parameters() if "sorsa_" in n]
 
 

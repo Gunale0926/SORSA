@@ -74,31 +74,33 @@ def remove_boxed(s):
     except:
         return None
 
-
-def preprocess_metamathqa(item, tokenizer, max_length=512):
-    # Same implementation with PiSSA
+def preprocess_metamathqa(item, tokenizer, max_length):
+    # Identical replica with PiSSA
     question = item["query"]
     completion = item["response"]
-    text = f"Below is an instruction that describes a task. Write a response that appropriately completes the request.\n\n### Instruction:\n{question}\n\n### Response:"
+    text = f"{tokenizer.bos_token}Below is an instruction that describes a task. Write a response that appropriately completes the request.\n\n### Instruction:\n{question}\n\n### Response:"
     target_text = f"{completion}{tokenizer.eos_token}"
     query = tokenizer.encode_plus(
         text=text,
         max_length=max_length,
         truncation=True,
         return_tensors="pt",
+        add_special_tokens=False
     )
-    full = tokenizer.encode_plus(
-        text=f"{text}{target_text}",
+    ans = tokenizer.encode_plus(
+        text=f"{target_text}",
         max_length=max_length,
         truncation=True,
         return_tensors="pt",
+        add_special_tokens=False
     )
 
-    input_ids = full["input_ids"].squeeze(0)
-    attention_mask = full["attention_mask"].squeeze(0)
+    length = query["input_ids"].size(-1)
+
+    input_ids = torch.concat((query["input_ids"].squeeze(0),ans["input_ids"].squeeze(0)))
+    attention_mask = torch.concat((query["attention_mask"].squeeze(0),ans["attention_mask"].squeeze(0)))
 
     labels = torch.full_like(input_ids, fill_value=-100)
-    length = query["input_ids"].size(-1)
     labels[length:] = input_ids[length:]
 
     batch = {
