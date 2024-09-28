@@ -42,25 +42,25 @@ Download the MetaMathQA dataset from [huggingface](https://huggingface.co/datase
 Run the `run.py` using hyperparameters in the paper to train:
 
 ```bash
-python3 run.py --run-path ./runs --name llama2_sorsa_r128 --model meta-llama/Llama-2-7b-hf --lr 3e-5 --wd 0.00 --batch-size 2 --accum-step 64 --gamma 4e-4  --rank 128 --epochs 1 --train --bf16 --tf32 --metamath
+python3 run.py --run-path ./runs --name llama2_sorsa_r128 --model meta-llama/Llama-2-7b-hf -p sorsa --lr 3e-5 --gamma 4e-4 --wd 0.00 --batch-size 2 --accum-step 64 --rank 128 --epochs 1 --train  --mix-precision bf16 --mix-precision tf32 --train-dataset metamath --split [:100000]
 ```
 
 After training, run the following command to merge the adapter to the base model:
 
 ```bash
-python3 run.py --run-path ./runs --name llama2_sorsa_r128 --merge
+python3 run.py --run-path ./runs --name llama2_sorsa_r128 -p sorsa --merge
 ```
 
 Run following command to evaluate on GSM-8K:
 
 ```bash
-python3 run.py --run-path ./runs --name llama2_sorsa_r128 --test --gsm-8k --bf16
+python3 run.py --run-path ./runs --name llama2_sorsa_r128 --test --test-dataset gsm-8k --test-precision bf16
 ```
 
 Run following command to evaluate on MATH:
 
 ```bash
-python3 run.py --run-path ./runs --name llama2_sorsa_r128 --test --math --bf16
+python3 run.py --run-path ./runs --name llama2_sorsa_r128 --test --test-dataset math --test-precision bf16
 ```
 
 Run following command to evaluate on HumanEval:
@@ -85,4 +85,3 @@ You could cite the work by using the following BibTeX Code:
       url={https://arxiv.org/abs/2409.00055}, 
 }
 ```
-
