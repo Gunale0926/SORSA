@@ -1,3 +1,4 @@
 name = "lora"
 
-from .layers import *
+from .layer import *
+from .model import *

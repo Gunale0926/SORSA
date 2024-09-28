@@ -1,6 +1,8 @@
 from datasets import load_dataset
+import pathlib
 import torch
-from sorsalib.model import SORSAModel, SORSAConfig, SORSATrainingArguments
+from loralib import LoRAModel, LoRAConfig
+from sorsalib import SORSAModel, SORSAConfig, SORSATrainingArguments
 from transformers import AutoTokenizer, AutoModelForCausalLM, AutoConfig
 from dataset import (
     preprocess_metamathqa,
@@ -15,11 +17,22 @@ from dotenv import dotenv_values
 from huggingface_hub import login
 from trainer import Trainer
 
+CONFIG = {"lora": LoRAConfig, "pissa": LoRAConfig, "sorsa": SORSAConfig}
+MODEL = {"lora": LoRAModel, "pissa": LoRAModel, "sorsa": SORSAModel}
+PREFIX  = {"lora": "lora_", "pissa":"lora_", "sorsa": "sorsa_"}
+
 parser = argparse.ArgumentParser(
     prog="SORSA Runner",
     description="Train and Test SORSA Layers",
     epilog="--help for more information",
 )
+
+parser.add_argument("--seed", type=int, default=42)
+
+parser.add_argument("-p", "--peft", choices=["sorsa", "lora", "pissa"])
+
+parser.add_argument("--model", type=str, default="meta-llama/Llama-2-7b-hf")
+parser.add_argument("--tokenizer", type=str, default=None)
 
 parser.add_argument("-n", "--name", type=str, default="SORSA")
 parser.add_argument("-r", "--rank", type=int, default=4)
@@ -30,30 +43,33 @@ parser.add_argument("-d", "--dropout", type=float, default=0.0)
 parser.add_argument("-t", "--train", action="store_true")
 parser.add_argument("-T", "--test", action="store_true")
 parser.add_argument("-m", "--merge", action="store_true")
+
+parser.add_argument("--train-dataset", choices=["metamath", "code"], default="metamath")
 parser.add_argument("--split", type=str, default="")
-parser.add_argument("--metamath", action="store_true")
-parser.add_argument("--code", action="store_true")
-parser.add_argument("--bf16", action="store_true")
-parser.add_argument("--fp16", action="store_true")
-parser.add_argument("--tf32", action="store_true")
-parser.add_argument("--model", type=str, default="meta-llama/Llama-2-7b-hf")
-parser.add_argument("--tokenizer", type=str, default=None)
-parser.add_argument("--svd-cache-path", type=str, default="./svd_cache")
-parser.add_argument("--run-path", type=str, default="./runs")
-parser.add_argument("--cache-path", type=str, default="./cache")
-parser.add_argument("--local", action="store_true")
-parser.add_argument("--seed", type=int, default=42)
+
+parser.add_argument("--test-dataset", choices=["gsm-8k", "math"], default="gsm-8k")
+parser.add_argument("--test-precision", choices=["bf16", "fp16", "fp32"], default="bf16")
+
+parser.add_argument("--mix-precision", choices=["bf16", "fp16", "fp32", "tf32"], action="append")
+parser.add_argument("--grad-cp", type=float, default=1.0)
+parser.add_argument("--scheduler", type=str, default="cosine")
+parser.add_argument("--warmup", type=float, default=0.03)
 parser.add_argument("--batch-size", type=int, default=8)
 parser.add_argument("--valid-batch-size", type=int, default=4)
 parser.add_argument("--epochs", type=int, default=5)
 parser.add_argument("--accum-steps", type=int, default=1)
 parser.add_argument("--lr", type=float, default=0.0002)
 parser.add_argument("--wd", type=float, default=0.01)
-parser.add_argument("--gsm-8k", action="store_true")
-parser.add_argument("--math", action="store_true")
+
+parser.add_argument("--svd-cache-path", type=pathlib.Path, default="./svd_cache")
+parser.add_argument("--run-path", type=pathlib.Path, default="./runs")
+parser.add_argument("--cache-path", type=pathlib.Path, default="./cache")
+
+parser.add_argument("--local", action="store_true")
 
 
 args = parser.parse_args()
+
 
 
 class TrainerConfig:
@@ -86,15 +102,14 @@ class TrainerConfig:
             args.model, cache_dir=args.cache_path, trust_remote_code=True
         )
         self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
-        if args.metamath:
+        if "metamath" in args.train_dataset:
             self.train_dataset = load_dataset(
                     "meta-math/MetaMathQA", split=f"train{args.split}"
             )
             self.train_dataset = self.train_dataset.map(
                 lambda x: preprocess_metamathqa(x, self.tokenizer, args.length)
             )
-
-        elif args.code:
+        if "code" in args.train_dataset:
             self.train_dataset = load_dataset(
                 "m-a-p/CodeFeedback-Filtered-Instruction", split=f"train{args.split}"
             )
@@ -106,47 +121,51 @@ class TrainerConfig:
         self.train_dataset.set_format(
             type="torch", columns=["input_ids", "labels", "attention_mask"]
         )
-        # target = [
-        #     "q_proj",
-        #     "o_proj",
-        #     "k_proj",
-        #     "v_proj",
-        #     "gate_proj",
-        #     "up_proj",
-        #     "down_proj",
-        # ]
         target = [
-            "attention",
-            "feed_forward"
+            "q_proj",
+            "o_proj",
+            "k_proj",
+            "v_proj",
+            "gate_proj",
+            "up_proj",
+            "down_proj",
         ]
-        self.config = SORSAConfig(
+        # target = [
+        #     "attention",
+        #     "feed_forward"
+        # ]
+        self.config = CONFIG[args.peft](
             base_model_name_or_path=args.model,
             target_modules=target,
             rank=self.rank,
             alpha=args.alpha,
-            sorsa_dropout=self.dropout,
+            dropout=self.dropout,
         )
         # Load model in ALL float32 (residual is quantized to bf16)
         if os.path.isdir(args.svd_cache_path):
             print("Loading SVDed Model...")
-            self.model = SORSAModel.from_pretrained(
+            self.model = MODEL[args.peft].from_pretrained(
                 pretrained_model_name_or_path=args.svd_cache_path,
             )
         else:
             print("Start from Pretrained Model...")
-            self.model = SORSAModel(self.config)
-            self.model.to("cuda")
-            self.model.sorsa_init()
-            self.model.save_pretrained(args.svd_cache_path)
+            self.model = MODEL[args.peft](self.config)
+            self.model.to(device)
+            if "sorsa" in args.peft:
+                self.model.sorsa_init()
+                self.model.save_pretrained(args.svd_cache_path)
+            if "lora" in args.peft:
+                self.model.lora_init()
+            if "pissa" in args.peft:
+                self.model.pissa_init()
 
         self.model.train()
 
         for name, param in self.model.named_parameters():
-            if "sorsa_" in name:
+            if PREFIX[args.peft] in name:
                 param.requires_grad = True
             else:
                 param.requires_grad = False
-
 
         self.training_arguments = SORSATrainingArguments(
             run_name=args.name,
@@ -160,15 +179,16 @@ class TrainerConfig:
             save_total_limit=1,
             report_to=["wandb"],
             save_strategy="steps",
-            lr_scheduler_type="cosine",
-            warmup_ratio=0.03,
+            lr_scheduler_type=args.scheduler,
+            warmup_ratio=args.warmup,
             seed=self.seed,
             weight_decay=args.wd,
             learning_rate=args.lr,
+            max_grad_norm=args.grad_cp,
             gamma=self.gamma,
-            bf16=True if args.bf16 else False,
-            fp16=True if args.fp16 else False,
-            tf32=True if args.tf32 else False,
+            bf16='bf16' in args.mix_precision,
+            fp16='fp16' in args.mix_precision,
+            tf32='tf32' in args.mix_precision,
         )
 
 
@@ -182,29 +202,28 @@ if args.test:
         args.tokenizer, cache_dir=args.cache_path, use_fast=True
     )
     tokenizer.pad_token_id = tokenizer.eos_token_id
-    if args.math:
-        dataset = "datasets/MATH_test.jsonl"
-    else:
-        dataset = "datasets/test-00000-of-00001.parquet"
     run_path = f"{args.run_path}/{args.name}"
     checkpoint_path = f"{run_path}/checkpoint"
-    if args.math:
+    precision_mapping = {
+        'bf16': 'bfloat16',
+        'fp16': 'float16',
+        'fp32': 'float32',
+    }
+    if "math" in args.test_dataset:
+        dataset = "datasets/MATH_test.jsonl"
         test_math(
             model=checkpoint_path,
             tokenizer=args.tokenizer,
             dataset=dataset,
-            precision=(
-                "bfloat16" if args.bf16 else ("float16" if args.fp16 else "float32")
-            ),
+            precision=precision_mapping[args.test_precision]
         )
-    elif args.gsm_8k:
+    elif "gsm-8k" in args.test_dataset:
+        dataset = "datasets/test-00000-of-00001.parquet"
         test_gsm(
             model=checkpoint_path,
             tokenizer=args.tokenizer,
             dataset=dataset,
-            precision=(
-                "bfloat16" if args.bf16 else ("float16" if args.fp16 else "float32")
-            ),
+            precision=precision_mapping[args.test_precision]
         )
 
 elif args.train:
@@ -223,9 +242,18 @@ elif args.merge:
     run_path = f"{args.run_path}/{args.name}"
     checkpoint_path = f"{run_path}/checkpoint"
     model = SORSAModel.from_pretrained(checkpoint_path)
-    model.to("cuda")
-    model.sorsa_merge(True)
-    model.save_pretrained(checkpoint_path, save_adapters_only=True)
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+    elif torch.backends.mps.is_available():
+        device = torch.device("mps")
+    else:
+        device = torch.device("cpu")
+    model.to(device)
+    model.merge(True)
+    for name, param in model.named_parameters():
+        if PREFIX[args.peft] in name:
+            model.set_submodule(name, None)
+    model.model.save_pretrained(checkpoint_path, save_adapters_only=True)
     if args.local is False:
         env = dotenv_values(".env")
         login(token=env["hf"])
