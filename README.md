@@ -15,6 +15,11 @@ The rapid advancement in large language models (LLMs) comes with a significant i
 
 ## Reproduce the Experiments
 
+First, install `sorsa` package from pip:
+```bash
+pip install sorsa
+```
+
 ### Llama 2 7B, Mistral v0.1 7B and Gemma 7B
 
 First, install the packages via anaconda
