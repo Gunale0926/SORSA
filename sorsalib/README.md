@@ -2,7 +2,7 @@
 
 ## Initialize SORSA model:
 ```python
-from sorsalib import SORSAConfig, SORSAModel, SORSATrainer, SORSATrainingArguments
+from sorsa import SORSAConfig, SORSAModel, SORSATrainer, SORSATrainingArguments
 config = SORSAConfig(
     base_model_name_or_path="meta-llama/Llama-2-7b-hf",
     target_modules=[
