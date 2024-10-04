@@ -3,7 +3,7 @@ from hf_to_rwkv import convert_to_rwkv
 import pathlib
 import torch
 from loralib import LoRAModel, LoRAConfig
-from sorsalib import SORSAModel, SORSAConfig, SORSATrainingArguments
+from sorsa import SORSAModel, SORSAConfig, SORSATrainer, SORSATrainingArguments
 from transformers import AutoTokenizer, AutoConfig
 from dataset import (
     preprocess_metamathqa,
@@ -23,7 +23,6 @@ import argparse
 import os
 from dotenv import dotenv_values
 from huggingface_hub import login
-from trainer import Trainer
 
 CONFIG = {"lora": LoRAConfig, "pissa": LoRAConfig, "sorsa": SORSAConfig}
 MODEL = {"lora": LoRAModel, "pissa": LoRAModel, "sorsa": SORSAModel}
@@ -259,7 +258,7 @@ if args.test and args.rwkv:
 
 elif args.train:
     config = TrainerConfig(args)
-    trainer = Trainer(
+    trainer = SORSATrainer(
         model=config.model,
         args=config.training_arguments,
         data_collator=lambda x: (collate_fn(x, config.tokenizer)),

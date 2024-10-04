@@ -7,3 +7,4 @@ name = "sorsa"
 from .layer import *
 from .model import *
 from .config import *
+from .trainer import SORSATrainer
