@@ -67,6 +67,7 @@ def test_math(model, tokenizer, precision):
 
 def test_gsm_rwkv(model, precision):
     import os
+
     os.environ["RWKV_JIT_ON"] = "1"
     os.environ["RWKV_CUDA_ON"] = "1"
 

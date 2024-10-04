@@ -166,12 +166,18 @@ class TrainerConfig:
             self.model = MODEL[args.peft](self.config)
             self.model.to(self.device)
             if "sorsa" in args.peft:
-                self.model.sorsa_init(torch.float32, torch.bfloat16)
+                self.model.sorsa_init(
+                    weight_dtype=torch.float32, adapter_dtype=torch.bfloat16
+                )
                 self.model.save_pretrained(args.svd_cache_path)
             if "lora" in args.peft:
-                self.model.lora_init(False, torch.float32, torch.bfloat16)
+                self.model.lora_init(
+                    False, weight_dtype=torch.float32, adapter_dtype=torch.bfloat16
+                )
             if "pissa" in args.peft:
-                self.model.lora_init(True, torch.float32, torch.bfloat16)
+                self.model.lora_init(
+                    True, weight_dtype=torch.float32, adapter_dtype=torch.bfloat16
+                )
                 self.model.save_pretrained(args.svd_cache_path)
 
         self.model.to(torch.float32)
