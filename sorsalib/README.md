@@ -28,7 +28,7 @@ trainingArguments = SORSATrainingArguments(
     # ...
     gamma=4e-4,
 )
-trainer = Trainer(
+trainer = SORSATrainer(
         model=sorsaModel,
         args=trainingArguments,
         train_dataset=train_dataset,
