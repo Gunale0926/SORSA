@@ -154,6 +154,7 @@ class TrainerConfig:
             alpha=args.alpha,
             dropout=self.dropout,
         )
+
         # Load model in ALL float32 (residual is quantized to bf16)
         if os.path.isdir(args.svd_cache_path):
             print("Loading SVDed Model...")
@@ -165,14 +166,15 @@ class TrainerConfig:
             self.model = MODEL[args.peft](self.config)
             self.model.to(self.device)
             if "sorsa" in args.peft:
-                self.model.sorsa_init()
+                self.model.sorsa_init(torch.float32, torch.bfloat16)
                 self.model.save_pretrained(args.svd_cache_path)
             if "lora" in args.peft:
-                self.model.lora_init()
+                self.model.lora_init(False, torch.float32, torch.bfloat16)
             if "pissa" in args.peft:
-                self.model.lora_init(pissa=True)
+                self.model.lora_init(True, torch.float32, torch.bfloat16)
                 self.model.save_pretrained(args.svd_cache_path)
 
+        self.model.to(torch.float32)
         self.model.train()
         self.model.set_trainable(True)
 
