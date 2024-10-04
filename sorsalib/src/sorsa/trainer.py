@@ -305,7 +305,7 @@ SCALER_NAME = "scaler.pt"
 FSDP_MODEL_NAME = "pytorch_model_fsdp"
 
 
-class Trainer:
+class SORSATrainer:
     """
     Trainer is a simple but feature-complete training and eval loop for PyTorch, optimized for 🤗 Transformers.
 

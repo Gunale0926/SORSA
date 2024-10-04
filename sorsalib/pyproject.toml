@@ -1,0 +1,21 @@
+[project]
+name = "sorsa"
+version = "0.2.1"
+authors = [
+  { name="Yang Cao", email="gunale0926@hotmail.com" },
+]
+description = "SORSA adapters implemented in Hugging Face Transformers"
+readme = "README.md"
+requires-python = ">=3.12"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+  'torch >= 1.8.0',
+  'transformers >= 4.0.0'
+]
+[project.urls]
+Homepage = "https://github.com/Gunale0926/SORSA/"
+Issues = "https://github.com/Gunale0926/SORSA/issues"
