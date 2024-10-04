@@ -65,15 +65,19 @@ class LoRAModel(PreTrainedModel):
                     lora_module.bias.data = module.bias.data
                 self._set_submodule(f"{name}", lora_module)
 
-    def lora_init(self, pissa=False, *args, **kwargs):
+    def lora_init(
+        self,
+        pissa=False,
+        weight_dtype: Optional[torch.dtype] = None,
+        adapter_dtype: Optional[torch.dtype] = None,
+    ):
         print("Initializing LoRA Adapters...")
         for module in self.modules():
             if isinstance(module, LoRALinear):
-                with torch.no_grad():
-                    if not pissa:
-                        module.lora_init(*args, **kwargs)
-                    else:
-                        module.pissa_init(*args, **kwargs)
+                if not pissa:
+                    module.lora_init(weight_dtype, adapter_dtype)
+                else:
+                    module.pissa_init(weight_dtype, adapter_dtype)
 
     def merge(self, mode=True):
         for module in self.modules():

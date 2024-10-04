@@ -13,7 +13,7 @@ import os
 from transformers import set_seed
 from datasets import load_dataset
 
-sys.path.append(os.path.expanduser('../'))
+sys.path.append(os.path.expanduser("../"))
 
 from sorsalib import SORSAModel, SORSAConfig
 from loralib import LoRAModel, LoRAConfig
@@ -92,9 +92,8 @@ class TrainerConfig:
         )
         self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
 
-        
         self.train_dataset = load_dataset(
-                "meta-math/MetaMathQA", split=f"train[:100000]"
+            "meta-math/MetaMathQA", split=f"train[:100000]"
         )
         self.train_dataset = self.train_dataset.map(
             lambda x: preprocess_metamathqa(x, self.tokenizer, args.length)
@@ -214,9 +213,7 @@ class TrainerConfig:
                 param.requires_grad = False
 
             for name, module in self.model.named_modules():
-                if any(t in name for t in targets) and isinstance(
-                    module, nn.Linear
-                ):
+                if any(t in name for t in targets) and isinstance(module, nn.Linear):
                     weight = f"{name}.weight"
                     param = self.model.get_parameter(weight)
                     param.requires_grad = True
@@ -282,5 +279,5 @@ analysis(
     metadata_path=config.metadata_path,
     step=step,
     best_val_loss=best_val_loss,
-    sorsa=args.sorsa
+    sorsa=args.sorsa,
 )

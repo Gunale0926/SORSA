@@ -4,7 +4,7 @@
 #  ------------------------------------------------------------------------------------------
 import torch
 import torch.nn as nn
-from typing import List
+from typing import List, Optional
 from transformers import PreTrainedModel, AutoModelForCausalLM
 
 from .layer import Linear as SORSALinear
@@ -67,12 +67,15 @@ class SORSAModel(PreTrainedModel):
                     sorsa_module.bias.data = module.bias.data
                 self._set_submodule(f"{name}", sorsa_module)
 
-    def sorsa_init(self, *args, **kwargs):
+    def sorsa_init(
+        self,
+        weight_dtype: Optional[torch.dtype] = None,
+        adapter_dtype: Optional[torch.dtype] = None,
+    ):
         print("Initializing SORSA Adapters...")
         for module in self.modules():
             if isinstance(module, SORSALinear):
-                with torch.no_grad():
-                    module.sorsa_init(*args, **kwargs)
+                module.sorsa_init(weight_dtype, adapter_dtype)
 
     def merge(self, mode=True):
         for module in self.modules():
