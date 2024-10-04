@@ -3,14 +3,14 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 import math
-from typing import Optional, List
+from typing import Optional
 
 
 class LoRALayer:
     def __init__(
         self,
         r: int,
-        alpha: int,
+        alpha: Optional[float],
         dropout: float,
         merge_weights: bool,
     ):
@@ -22,7 +22,7 @@ class LoRALayer:
             self.scale = alpha / r
         # Optional dropout
         if dropout > 0.0:
-            self.lora_dropout = nn.Dropout(p=lora_dropout)
+            self.lora_dropout = nn.Dropout(p=dropout)
         else:
             self.lora_dropout = lambda x: x
         # Mark the weight as unmerged
@@ -37,11 +37,10 @@ class Linear(nn.Module, LoRALayer):
         in_features: int,
         out_features: int,
         r: int = 0,
-        alpha: int = None,
+        alpha: Optional[float] = None,
         dropout: float = 0.0,
         merge_weights: bool = True,
         bias=False,
-        **kwargs
     ):
         nn.Module.__init__(self)
         LoRALayer.__init__(
@@ -73,6 +72,7 @@ class Linear(nn.Module, LoRALayer):
             adapter_dtype = weight_dtype
         if hasattr(self, "lora_A"):
             self.merged = False
+            self.weight.data.to(torch.float32)  # Convert to float32 for SVD
             u, s, vt = torch.linalg.svd(self.weight.T, full_matrices=False)
             s_r = s[: self.r]
             self.lora_A.data = (
