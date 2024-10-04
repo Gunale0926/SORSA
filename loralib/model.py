@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from typing import List
+from typing import List, Optional
 from transformers import (
     PreTrainedModel,
     AutoModelForCausalLM,
@@ -65,15 +65,15 @@ class LoRAModel(PreTrainedModel):
                     lora_module.bias.data = module.bias.data
                 self._set_submodule(f"{name}", lora_module)
 
-    def lora_init(self, pissa=False):
+    def lora_init(self, pissa=False, *args, **kwargs):
         print("Initializing LoRA Adapters...")
         for module in self.modules():
             if isinstance(module, LoRALinear):
                 with torch.no_grad():
                     if not pissa:
-                        module.lora_init()
+                        module.lora_init(*args, **kwargs)
                     else:
-                        module.pissa_init()
+                        module.pissa_init(*args, **kwargs)
 
     def merge(self, mode=True):
         for module in self.modules():

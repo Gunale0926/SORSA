@@ -65,17 +65,24 @@ class Linear(SORSALayer, nn.Module):
             # Freezing the pre-trained weight matrix
             self.weight.requires_grad = False
 
-    def sorsa_init(self):
+    def sorsa_init(
+        self,
+        weight_dtype: Optional[torch.dtype] = None,
+        adapter_dtype: Optional[torch.dtype] = None,
+    ):
+        if weight_dtype is None:
+            weight_dtype = self.weight.dtype
+        if adapter_dtype is None:
+            adapter_dtype = weight_dtype
         if hasattr(self, "sorsa_A"):
             self.merged = False
+            self.weight.to(torch.float32)  # Convert to FP32 for SVD
             u, s, vt = torch.linalg.svd(self.weight.T, full_matrices=False)
-            self.sorsa_A.data = u[:, : self.r].T.contiguous()
-            self.sorsa_S.data = s[: self.r]
-            self.sorsa_B.data = vt[: self.r, :].T.contiguous()
+            self.sorsa_A.data = u[:, : self.r].T.contiguous().to(adapter_dtype)
+            self.sorsa_S.data = s[: self.r].to(adapter_dtype)
+            self.sorsa_B.data = vt[: self.r, :].T.contiguous().to(adapter_dtype)
             merge = (self.sorsa_B * self.sorsa_S) @ self.sorsa_A
-            self.weight.data = (self.weight - merge * self.scale).to(
-                torch.bfloat16
-            )  # Quantize to BF16 (Align the same setup with PiSSA)
+            self.weight.data = (self.weight - merge * self.scale).to(weight_dtype)
 
     def _merge(self, mode: bool):
         if mode:

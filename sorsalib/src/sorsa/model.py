@@ -67,12 +67,12 @@ class SORSAModel(PreTrainedModel):
                     sorsa_module.bias.data = module.bias.data
                 self._set_submodule(f"{name}", sorsa_module)
 
-    def sorsa_init(self):
+    def sorsa_init(self, *args, **kwargs):
         print("Initializing SORSA Adapters...")
         for module in self.modules():
             if isinstance(module, SORSALinear):
                 with torch.no_grad():
-                    module.sorsa_init()
+                    module.sorsa_init(*args, **kwargs)
 
     def merge(self, mode=True):
         for module in self.modules():

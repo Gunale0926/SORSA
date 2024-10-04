@@ -3,14 +3,14 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 import math
-from typing import Optional, List
+from typing import Optional
 
 
 class LoRALayer:
     def __init__(
         self,
         r: int,
-        alpha: int,
+        alpha: Optional[float],
         dropout: float,
         merge_weights: bool,
     ):
@@ -22,7 +22,7 @@ class LoRALayer:
             self.scale = alpha / r
         # Optional dropout
         if dropout > 0.0:
-            self.lora_dropout = nn.Dropout(p=lora_dropout)
+            self.lora_dropout = nn.Dropout(p=dropout)
         else:
             self.lora_dropout = lambda x: x
         # Mark the weight as unmerged
@@ -37,11 +37,10 @@ class Linear(nn.Module, LoRALayer):
         in_features: int,
         out_features: int,
         r: int = 0,
-        alpha: int = None,
+        alpha: Optional[float] = None,
         dropout: float = 0.0,
         merge_weights: bool = True,
         bias=False,
-        **kwargs
     ):
         nn.Module.__init__(self)
         LoRALayer.__init__(
@@ -64,21 +63,41 @@ class Linear(nn.Module, LoRALayer):
             # Freezing the pre-trained weight matrix
             self.weight.requires_grad = False
 
-    def pissa_init(self):
+    def pissa_init(
+        self, weight_dtype: Optional[torch.dtype], adapter_dtype: Optional[torch.dtype]
+    ):
+        if weight_dtype is None:
+            weight_dtype = self.weight.dtype
+        if adapter_dtype is None:
+            adapter_dtype = weight_dtype
         if hasattr(self, "lora_A"):
             self.merged = False
+            self.weight.data.to(torch.float32)  # Convert to float32 for SVD
             u, s, vt = torch.linalg.svd(self.weight.T, full_matrices=False)
             s_r = s[: self.r]
-            self.lora_A.data = (u[:, : self.r] @ torch.diag(s_r**0.5)).T.contiguous()
-            self.lora_B.data = (torch.diag(s_r**0.5) @ vt[: self.r, :]).T.contiguous()
+            self.lora_A.data = (
+                (u[:, : self.r] @ torch.diag(s_r**0.5)).T.contiguous().to(adapter_dtype)
+            )
+            self.lora_B.data = (
+                (torch.diag(s_r**0.5) @ vt[: self.r, :])
+                .T.contiguous()
+                .to(adapter_dtype)
+            )
             merge = self.lora_B @ self.lora_A
-            self.weight.data = (self.weight - merge * self.scale).to(torch.bfloat16)
+            self.weight.data = (self.weight - merge * self.scale).to(weight_dtype)
 
-    def lora_init(self):
+    def lora_init(
+        self, weight_dtype: Optional[torch.dtype], adapter_dtype: Optional[torch.dtype]
+    ):
+        if weight_dtype is None:
+            weight_dtype = self.weight.dtype
+        if adapter_dtype is None:
+            adapter_dtype = weight_dtype
         if hasattr(self, "lora_A"):
             self.merged = False
-            nn.init.kaiming_uniform_(self.lora_A, a=math.sqrt(5))
-            nn.init.zeros_(self.lora_B)
+            nn.init.kaiming_uniform_(self.lora_A, a=math.sqrt(5)).to(adapter_dtype)
+            nn.init.zeros_(self.lora_B).to(adapter_dtype)
+            self.weight.to(weight_dtype)
 
     def merge(self, mode: bool):
         if mode:
