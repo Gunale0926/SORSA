@@ -70,4 +70,4 @@ If you are training, merging or testing RWKV6 model, please add `--rwkv` flag to
 
 ## Cite the work
 
-You could cite the work by using the BibTeX Code in `CITATION.bib`.
+You could cite the work by using the BibTeX Code in [CITATION.bib](CITATION.bib).
