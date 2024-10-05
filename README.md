@@ -1,6 +1,6 @@
 # SORSA: Singular Values and Orthonormal Regularized Singular Vectors Adaptation of Large Language Models
 
-[![arXiv](https://img.shields.io/badge/arXiv-2409.00055-b31b1b.svg)](https://arxiv.org/abs/2409.00055) ![PyPI - Version](https://img.shields.io/pypi/v/sorsa) ![PyPI - Downloads](https://img.shields.io/pypi/dm/sorsa)
+[![arXiv](https://img.shields.io/badge/arXiv-2409.00055-b31b1b.svg)](https://arxiv.org/abs/2409.00055) ![PyPI - Version](https://img.shields.io/pypi/v/sorsa)
 
 This repository contains the codes of experiments of the paper *SORSA: Singular Values and Orthonormal Regularized Singular Vectors Adaptation of Large Language Models*.
 
@@ -70,4 +70,20 @@ If you are training, merging or testing RWKV6 model, please add `--rwkv` flag to
 
 ## Cite the work
 
-You could cite the work by using the BibTeX Code in [CITATION.bib](CITATION.bib).
+You could cite the work by using the BibTeX code as follows:
+```bibtex
+@misc{CaoSORSA2024,
+  title = {{{SORSA}}: {{Singular Values}} and {{Orthonormal Regularized Singular Vectors Adaptation}} of {{Large Language Models}}},
+  shorttitle = {{{SORSA}}},
+  author = {Cao, Yang},
+  year = {2024},
+  month = oct,
+  number = {arXiv:2409.00055},
+  eprint = {2409.00055},
+  primaryclass = {cs},
+  doi = {10.48550/arXiv.2409.00055},
+  url = {http://arxiv.org/abs/2409.00055},
+  archiveprefix = {arXiv},
+  keywords = {Computer Science - Computation and Language,Computer Science - Machine Learning},
+}
+```
