@@ -1,3 +1,10 @@
+#  ------------------------------------------------------------------------------------------
+#  SORSA: Singular Values and Orthonormal Regularized Singular Vectors Adaptation of Large Language Models
+#  arXiv: https://arxiv.org/abs/2409.00055
+#  Copyright (c) 2024 Yang Cao
+#  Licensed under the Apache License, Version 2.0.
+#  ------------------------------------------------------------------------------------------
+
 import pandas as pd
 from dataset import extract_answer_number, extract_answer, remove_boxed
 from inference.util import is_equiv, last_boxed_only_string
