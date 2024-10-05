@@ -1,7 +1,13 @@
 #  ------------------------------------------------------------------------------------------
-#  Copyright 2024 Yang Cao.
-#  Licensed under the MIT License (MIT). See LICENSE in the repo root for license information.
+#  SORSA: Singular Values and Orthonormal Regularized Singular Vectors Adaptation of Large Language Models
+#  arXiv: https://arxiv.org/abs/2409.00055
+#  Copyright (c) 2024 Yang Cao
+#  Licensed under the Apache License, Version 2.0.
 #  ------------------------------------------------------------------------------------------
+
+"""
+SORSA layers for PyTorch.
+"""
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -9,6 +15,19 @@ from typing import Optional
 
 
 class SORSALayer:
+    """
+    Base class for SORSA layers.
+
+    This class implements the core functionality of SORSA, which can be used to create
+    parameter-efficient versions of various layer types.
+
+    Args:
+        r (int): Rank of the SORSA matrices.
+        alpha (Optional[float]): Scaling factor for the SORSA update. If None, no scaling is applied.
+        dropout (float): Dropout probability for SORSA matrices.
+        merge_weights (bool): Whether to merge SORSA weights with the main weights during inference.
+    """
+
     def __init__(
         self,
         r: int,
@@ -32,7 +51,21 @@ class SORSALayer:
 
 
 class Linear(SORSALayer, nn.Module):
-    # SORSA implemented in a dense layer
+    """
+    SORSA implementation for a linear layer.
+
+    This class replaces a standard linear layer with a SORSA-enabled version.
+
+    Args:
+        in_features (int): Size of each input sample.
+        out_features (int): Size of each output sample.
+        r (int): Rank of the SORSA matrices.
+        alpha (Optional[float]): Scaling factor for the SORSA update. If None, no scaling is applied.
+        dropout (float): Dropout probability for SORSA matrices.
+        merge_weights (bool): Whether to merge SORSA weights with the main weights during inference.
+        bias (bool): If set to False, the layer will not learn an additive bias.
+    """
+
     def __init__(
         self,
         in_features: int,
@@ -70,6 +103,13 @@ class Linear(SORSALayer, nn.Module):
         weight_dtype: Optional[torch.dtype] = None,
         adapter_dtype: Optional[torch.dtype] = None,
     ):
+        """
+        Initialize SORSA matrices using SVD of the original weight matrix.
+
+        Args:
+            weight_dtype (Optional[torch.dtype]): Dtype for the weight matrix.
+            adapter_dtype (Optional[torch.dtype]): Dtype for the SORSA matrices.
+        """
         if weight_dtype is None:
             weight_dtype = self.weight.dtype
         if adapter_dtype is None:
@@ -85,6 +125,12 @@ class Linear(SORSALayer, nn.Module):
             self.weight.data = (self.weight - merge * self.scale).to(weight_dtype)
 
     def _merge(self, mode: bool):
+        """
+        Merge or unmerge SORSA weights with the main weight matrix.
+
+        Args:
+            mode (bool): If True, merge the weights. If False, unmerge the weights.
+        """
         if mode:
             if self.merge_weights and not self.merged:
                 # Merge the weights and mark it
@@ -101,6 +147,15 @@ class Linear(SORSALayer, nn.Module):
                 self.merged = False
 
     def forward(self, x: torch.Tensor):
+        """
+        Forward pass of the SORSA linear layer.
+
+        Args:
+            x (torch.Tensor): Input tensor.
+
+        Returns:
+            torch.Tensor: Output after applying the linear transformation (and SORSA if applicable).
+        """
         if self.r > 0 and not self.merged:
             result = F.linear(x, self.weight)
             result += (
@@ -117,8 +172,16 @@ class Linear(SORSALayer, nn.Module):
             return F.linear(x, self.weight, bias=self.bias)
 
 
-# Largely adpot idea from AdaLoRA
 def calc_ortho(model):
+    """
+    Calculate the average orthogonal regularizer loss for SORSA matrices in the model.
+
+    Args:
+        model: The PyTorch model containing SORSA layers.
+
+    Returns:
+        float or None: The average orthogonality loss, or None if no SORSA matrices are found.
+    """
     ortho_loss = 0.0
     den = 0
     for name, param in model.named_parameters():

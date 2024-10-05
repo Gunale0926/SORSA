@@ -1,3 +1,10 @@
+#  ------------------------------------------------------------------------------------------
+#  SORSA: Singular Values and Orthonormal Regularized Singular Vectors Adaptation of Large Language Models
+#  arXiv: https://arxiv.org/abs/2409.00055
+#  Copyright (c) 2024 Yang Cao
+#  Licensed under the Apache License, Version 2.0.
+#  ------------------------------------------------------------------------------------------
+
 from datasets import load_dataset
 from hf_to_rwkv import convert_to_rwkv
 import pathlib
