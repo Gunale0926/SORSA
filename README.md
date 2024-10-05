@@ -20,6 +20,11 @@ First, install `sorsa` package from pip:
 pip install sorsa
 ```
 
+Then, create `.env` file in the root directory of the project and add your [Hugging Face Access Token](https://huggingface.co/settings/tokens):
+```bash
+hf=Your_Hugging_Face_Access_Token
+```
+
 ### Llama 2 7B, Mistral v0.1 7B and Gemma 7B
 
 First, install the packages via anaconda
