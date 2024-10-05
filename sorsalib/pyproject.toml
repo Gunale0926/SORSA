@@ -6,7 +6,7 @@ authors = [
 ]
 description = "SORSA adapters implemented in Hugging Face Transformers"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.8"
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License",
