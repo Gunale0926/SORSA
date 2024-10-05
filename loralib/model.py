@@ -91,3 +91,5 @@ class LoRAModel(PreTrainedModel):
         for name, param in self.named_parameters():
             if "lora_" in name:
                 param.requires_grad = mode
+            else:
+                param.requires_grad = False
