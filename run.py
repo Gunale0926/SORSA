@@ -187,7 +187,6 @@ class TrainerConfig:
                 )
                 self.model.save_pretrained(args.svd_cache_path)
 
-        self.model.to(torch.float32)
         self.model.train()
         self.model.set_trainable(True)
 
