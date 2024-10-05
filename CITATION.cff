@@ -14,8 +14,7 @@ preferred-citation:
     given-names: "Yang"
     orcid: "https://orcid.org/0000-0000-0000-0000"
   doi: "10.48550/arXiv.2409.00055"
-  publisher: "arXiv"
   url = "http://arxiv.org/abs/2409.00055"
   title: "SORSA: Singular Values and Orthonormal Regularized Singular Vectors Adaptation of Large Language Models"
   year: 2024
-  month: oct
+  month: 10
