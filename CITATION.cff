@@ -7,7 +7,7 @@ authors:
 title: "SORSA: Singular Values and Orthonormal Regularized Singular Vectors Adaptation of Large Language Models"
 date-released: 2024-08-21
 url: "https://github.com/Gunale0926/SORSA"
-  preferred-citation:
+preferred-citation:
   type: generic
   authors:
   - family-names: "Cao"
