@@ -173,3 +173,5 @@ class SORSAModel(PreTrainedModel):
         for name, param in self.named_parameters():
             if "sorsa_" in name:
                 param.requires_grad = mode
+            else:
+                param.requires_grad = False
