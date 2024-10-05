@@ -1,7 +1,10 @@
 #  ------------------------------------------------------------------------------------------
-#  Copyright 2024 Yang Cao.
-#  Licensed under the MIT License (MIT). See LICENSE in the repo root for license information.
+#  SORSA: Singular Values and Orthonormal Regularized Singular Vectors Adaptation of Large Language Models
+#  arXiv: https://arxiv.org/abs/2409.00055
+#  Copyright (c) 2024 Yang Cao
+#  Licensed under the Apache License, Version 2.0.
 #  ------------------------------------------------------------------------------------------
+
 name = "sorsa"
 
 from .layer import *
