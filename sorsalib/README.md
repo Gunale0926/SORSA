@@ -15,23 +15,23 @@ config = SORSAConfig(
         "down_proj",
     ],
     rank=16,
-    dropout=0,
 )
 sorsaModel = SORSAModel(config)
-self.model.to("cuda")
-self.model.sorsa_init() # Initialize SORSA adapters.
+sorsaModel.to("cuda") # Note: using CUDA to perform SVD will be less accurate than CPU
+sorsaModel.sorsa_init() # Initialize SORSA adapters.
+sorsaModel.set_trainable(True) # Set all adapters to trainable
 ```
 
 ## Train SORSA model:
 ```python
 trainingArguments = SORSATrainingArguments(
     # ...
-    gamma=4e-4,
+    gamma=4e-4, # Learning rate for Orthonormal Regularizer
 )
 trainer = SORSATrainer(
         model=sorsaModel,
         args=trainingArguments,
-        train_dataset=train_dataset,
+        train_dataset=train_dataset, # Your dataset
 )
 trainer.train()
 ```
