@@ -72,18 +72,10 @@ If you are training, merging or testing RWKV6 model, please add `--rwkv` flag to
 
 You could cite the work by using the BibTeX code as follows:
 ```bibtex
-@misc{CaoSORSA2024,
-  title = {{{SORSA}}: {{Singular Values}} and {{Orthonormal Regularized Singular Vectors Adaptation}} of {{Large Language Models}}},
-  shorttitle = {{{SORSA}}},
-  author = {Cao, Yang},
-  year = {2024},
-  month = oct,
-  number = {arXiv:2409.00055},
-  eprint = {2409.00055},
-  primaryclass = {cs},
-  doi = {10.48550/arXiv.2409.00055},
-  url = {http://arxiv.org/abs/2409.00055},
-  archiveprefix = {arXiv},
-  keywords = {Computer Science - Computation and Language,Computer Science - Machine Learning},
+@article{cao2024sorsa,
+  title={SORSA: Singular Values and Orthonormal Regularized Singular Vectors Adaptation of Large Language Models},
+  author={Cao, Yang},
+  journal={arXiv preprint arXiv:2409.00055},
+  year={2024}
 }
 ```
