@@ -95,9 +95,11 @@ class Linear(nn.Module, LoRALayer):
             adapter_dtype = weight_dtype
         if hasattr(self, "lora_A"):
             self.merged = False
-            nn.init.kaiming_uniform_(self.lora_A, a=math.sqrt(5)).to(adapter_dtype)
+            nn.init.kaiming_uniform_(self.lora_A, a=math.sqrt(5))
+            self.lora_A.data = self.lora_A.data.to(adapter_dtype)
             nn.init.zeros_(self.lora_B).to(adapter_dtype)
-            self.weight.to(weight_dtype)
+            self.lora_B.data = self.lora_B.data.to(adapter_dtype)
+            self.weight.data = self.weight.data.to(weight_dtype)
 
     def merge(self, mode: bool):
         if mode:
